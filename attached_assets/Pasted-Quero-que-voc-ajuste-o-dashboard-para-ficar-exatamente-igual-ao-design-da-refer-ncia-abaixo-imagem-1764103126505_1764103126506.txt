@@ -1,0 +1,93 @@
+Quero que você ajuste o dashboard para ficar exatamente igual ao design da referência abaixo (imagem 2 do meu arquivo), com todos os indicadores funcionando corretamente.  
+O dashboard atual (imagem 1) está incompleto — faltam KPIs e a estrutura está incorreta.
+
+Aqui está o arquivo com as imagens de referência:
+"/mnt/data/Captura de Tela 2025-11-25 às 17.35.14.png"
+
+🔥 OBJETIVO  
+Implementar o dashboard seguindo fielmente o design da referência (imagem 2).  
+Ele deve exibir os seguintes KPIs:
+
+1. **Pontos Totais**
+2. **Artes Feitas**
+3. **Demandas**
+4. **Top Performance**
+5. **Produtividade por Designer (gráfico)**
+6. **Distribuição de Pontos (gráfico circular)**
+
+📌 OBSERVAÇÕES IMPORTANTES:  
+- Todos os valores precisam vir do banco de dados real.  
+- Pode modificar o schema do banco, criar novas tabelas, novas views ou queries, se necessário.  
+- Os KPIs devem mudar dinamicamente baseado nos filtros (data + designer).  
+- A mesma lógica que você já fez para gráficos deve alimentar esses KPIs.  
+- Se faltar algum campo no banco, CRIE.  
+- Se a estrutura atual dificultar, REFAÇA de forma consistente.
+
+📌 DETALHES FUNCIONAIS:
+
+### 1. Pontos Totais  
+Somatório dos pontos no período selecionado.
+
+### 2. Artes Feitas  
+Quantidade total de artes no período.
+
+### 3. Demandas  
+Quantidade total de demandas (somando registros agrupados).
+
+### 4. Top Performance  
+Designer que mais pontuou no período.  
+Exibir nome e pontos.
+
+### 5. Gráficos  
+- **Produtividade por Designer** = soma de pontos no período agrupado por designer  
+- **Distribuição de Pontos** = donut chart com o total de cada designer no período  
+
+### 6. Filtros  
+A página precisa responder a dois filtros:  
+- Data (hoje · semana · mês · personalizado)  
+- Designer
+
+📌 SOBRE A SEMANA  
+Consertar a contagem automática:  
+- Semana = Segunda a Domingo da semana atual  
+- Médias ignoram domingos (Seg–Sáb)
+
+📌 SOBRE A COR DOS DESIGNERS  
+Cada designer já tem sua cor definida.  
+Você deve aplicar essa cor nos gráficos automaticamente.
+
+📌 SOBRE O FRONT  
+- Inserir os 4 boxes de KPIs exatamente como na referência  
+- Manter o mesmo espaçamento, layout, cores e hierarquia visual  
+- Ajustar responsividade
+
+📌 SOBRE O BACKEND  
+Garanta que existam endpoints como:  
+GET /stats  
+GET /stats/designer  
+GET /stats/period  
+GET /stats/top  
+GET /stats/charts  
+
+Se não existirem, CRIE.  
+Se estiverem incompletos, CORRIJA.
+
+📌 SOBRE O BANCO  
+Se o banco não possuir todos os campos necessários, CRIE MIGRATIONS automaticamente.
+
+Campos que devem existir:  
+- hora_inicio  
+- pontos_dia  
+- artes_dia  
+- designer_id  
+- created_at (data/hora da demanda)  
+- tipo_arte  
+- pontos_por_tipo  
+- variacoes_qtd  
+- variacao_pts  
+
+📌 TAREFA FINAL  
+Ajuste tudo até o dashboard ficar idêntico ao da referência visual.  
+Depois disso, execute o app e valide que os números aparecem corretamente.
+
+Faça todas as correções necessárias sem pedir mais informações.

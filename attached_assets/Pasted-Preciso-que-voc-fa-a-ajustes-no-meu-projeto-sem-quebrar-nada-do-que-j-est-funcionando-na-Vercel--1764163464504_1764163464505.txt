@@ -1,0 +1,94 @@
+Preciso que você faça ajustes no meu projeto sem quebrar nada do que já está funcionando na Vercel. Siga as correções exatamente como descrevi:
+
+=========================
+1️⃣ CORRIGIR REGISTRO DE INÍCIO DO EXPEDIENTE
+=========================
+
+Hoje o backend já tem o endpoint:
+
+POST /api/work-sessions
+→ cria uma sessão somente 1 vez por dia por designer.
+
+Porém o FRONTEND **não chama esse endpoint quando o designer faz login**.
+
+👉 Ajuste:
+
+- Quando o designer faz login com sucesso:
+  - Chamar automaticamente POST /api/work-sessions enviando userId.
+  - E guardar a sessão retornada no state (mas não precisa mostrar agora).
+  
+Isso fará com que o horário de início apareça corretamente na página Histórico > Expedientes.
+
+
+=========================
+2️⃣ CONSERTAR PROBLEMA DE DESLOGAR AO DAR F5
+=========================
+
+Hoje o login desaparece porque o frontend salva o usuário apenas no estado interno.
+
+👉 Ajuste obrigatórios:
+
+- Ao fazer login:
+  - Salvar userId, name, role e avatar no localStorage.
+- Ao abrir o app (App.tsx ou equivalente):
+  - Verificar se existe user salvo no localStorage
+  - Se sim, restaurar automaticamente.
+- Não precisa token JWT, apenas manter a sessão local do usuário.
+
+Com isso, ao dar F5 o usuário continua logado.
+
+
+=========================
+3️⃣ ADICIONAR FUNÇÃO PARA TROCAR SENHA DO ADMINISTRADOR
+=========================
+
+Adicionar no backend:
+
+PUT /api/auth/change-password
+Body:
+{
+  "userId": "a1",
+  "oldPassword": "...",
+  "newPassword": "..."
+}
+
+→ Validar senha antiga com comparePassword  
+→ Atualizar para nova senha usando hashPassword  
+
+No frontend:
+- Na página Configurações, criar um formulário simples:
+  - Senha atual
+  - Nova senha
+  - Botão “Alterar senha”
+- Exibir mensagem de sucesso ou erro.
+
+
+=========================
+4️⃣ AJUSTES DE FEEDBACKS (DESIGNERS)
+=========================
+
+Hoje os feedbacks têm 2 problemas:
+
+💭 A) Não aparece indicador de novo feedback  
+💭 B) O designer não consegue clicar para abrir a imagem.
+
+👉 Ajustes:
+
+A) Quando buscar /api/feedbacks?designerId=...
+- Verificar se viewed === false
+- Se houver, exibir “Novo” num badge no menu Feedbacks.
+
+B) No card de feedback:
+- Transformar as imagens image_urls[] em imagens CLICÁVEIS
+- Ao clicar, abrir modal para visualizar em tamanho maior.
+
+=========================
+IMPORTANTE:
+- NÃO REMOVA nenhuma função já existente.
+- NÃO altere o funcionamento atual de demandas, settings, lições e usuários.
+- Apenas implemente as correções pedidas acima.
+- Depois de fazer as alterações, gere um commit com a mensagem:
+  “Fix: login persistence, work-session creation, admin password change, feedback image modal”
+=========================
+
+Depois me mostre todos os arquivos que foram modificados e seus novos conteúdos completos.

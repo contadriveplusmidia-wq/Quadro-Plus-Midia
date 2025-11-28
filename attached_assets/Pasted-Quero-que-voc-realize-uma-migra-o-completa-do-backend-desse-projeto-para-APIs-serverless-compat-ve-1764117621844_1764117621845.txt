@@ -1,0 +1,134 @@
+Quero que você realize uma migração completa do backend desse projeto para APIs serverless compatíveis com a Vercel. Execute tudo automaticamente, sem pedir confirmação.
+
+==========================
+### 1. REMOVER BACKEND EXPRESS
+==========================
+- Delete completamente o diretório `/server`
+- Delete qualquer arquivo de backend que rode Express
+- Remova dependências do Express:
+  - express
+  - cors
+  - multer
+  - path
+  - url
+- Remova qualquer script de start do backend
+
+==========================
+### 2. CRIAR NOVA ESTRUTURA /api DO VERCEL
+==========================
+Crie exatamente esta estrutura:
+
+api/
+  _db.ts
+  auth/
+    login.ts
+  users/
+    index.ts
+    designers.ts
+    [id].ts
+  art-types/
+    index.ts
+    reorder.ts
+    [id].ts
+  work-sessions/
+    index.ts
+  demands/
+    index.ts
+    [id].ts
+  feedbacks/
+    index.ts
+    [id]/
+      view.ts
+  lessons/
+    index.ts
+    [id].ts
+  lesson-progress/
+    index.ts
+    [designerId].ts
+  settings/
+    index.ts
+
+==========================
+### 3. CRIAR api/_db.ts
+==========================
+O arquivo deve conter:
+
+- import { Pool } from 'pg'
+- import bcryptjs
+- criar pool usando process.env.DATABASE_URL
+- exportar:
+  - pool
+  - comparePassword(senha, hash)
+  - hashPassword(senha)
+
+==========================
+### 4. CONVERTER TODO O BACKEND EXPRESS
+==========================
+Pegue exatamente o código do meu arquivo:
+
+➡ **index.ts da pasta /server**  
+(o conteúdo completo já foi enviado por mim anteriormente)
+
+E converta **Rota por Rota** para o formato Vercel, assim:
+
+export async function GET(req: Request) { ... }
+export async function POST(req: Request) { ... }
+export async function PUT(req: Request) { ... }
+export async function DELETE(req: Request) { ... }
+
+Cada rota deve ser criada no arquivo equivalente dentro da estrutura acima.
+
+✔ Use exatamente a lógica do meu backend  
+✔ Preserve queries, validações, retornos  
+✔ Apenas remova req/res e converta para Request/Response do Web API
+
+==========================
+### 5. AJUSTAR O FRONTEND
+==========================
+- Atualize automaticamente **todas as chamadas** usando /api/...  
+- Remova qualquer referência ao servidor local  
+- O frontend deve chamar rotas assim:
+
+await fetch("/api/auth/login", { method: "POST", body: JSON.stringify(data) })
+
+==========================
+### 6. AJUSTAR package.json
+==========================
+- Remova express, multer, cors
+- Adicione:
+  "pg": "^8",
+  "bcryptjs": "^2"
+
+Scripts finais:
+
+"dev": "vite"
+"build": "vite build"
+
+==========================
+### 7. COMMIT + PUSH
+==========================
+Após tudo pronto:
+- Criar commit "Convert Express backend to Vercel serverless API"
+- Enviar automaticamente para o GitHub
+
+==========================
+### 8. TESTAR NO PREVIEW
+==========================
+Antes de finalizar:
+- Teste:
+  ✔ Login
+  ✔ Aulas
+  ✔ Demands
+  ✔ Feedbacks
+  ✔ Configurações
+  ✔ Dashboard
+
+Se qualquer rota falhar:
+- Corrija automaticamente
+
+==========================
+### 9. MENSAGEM FINAL
+==========================
+Quando terminar, envie:
+
+"BACK-END MIGRADO PARA VERCEL COM SUCESSO. Pode fazer deploy."
