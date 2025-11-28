@@ -1,9 +1,87 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Trophy, Crown, Star, Calendar, Sparkles, Award } from 'lucide-react';
+import { Trophy, Crown, Star, Calendar, Sparkles, Award, TrendingUp, MessageSquare } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Cell, CartesianGrid } from 'recharts';
+
+// Componente de Tooltip customizado com tema
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color?: string; payload?: { color: string } }>;
+  label?: string;
+  isDark: boolean;
+  formatter?: (value: number, name: string) => [number | string, string];
+}
+
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, isDark, formatter }) => {
+  if (!active || !payload || payload.length === 0) return null;
+
+  return (
+    <div
+      className={`
+        px-3 py-2.5 rounded-md shadow-lg transition-all duration-150
+        ${isDark 
+          ? 'bg-gray-800/95 border border-gray-600/50' 
+          : 'bg-white/95 border border-gray-200'
+        }
+      `}
+    >
+      <p className={`text-xs font-semibold mb-1.5 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
+        {label}
+      </p>
+      <div className="space-y-1">
+        {payload.map((entry, index) => {
+          const [formattedValue, formattedName] = formatter 
+            ? formatter(entry.value, entry.name) 
+            : [entry.value, entry.name];
+          const color = entry.color || entry.payload?.color || '#3B82F6';
+          return (
+            <div key={index} className="flex items-center gap-2 text-xs">
+              <div 
+                className="w-2.5 h-2.5 rounded-full" 
+                style={{ backgroundColor: color }}
+              />
+              <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
+                {formattedName}:
+              </span>
+              <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {formattedValue}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
 
 export const DesignerPremiacoes: React.FC = () => {
-  const { currentUser, awards, users } = useApp();
+  const { currentUser, awards, users, settings, demands, resetAwardsUpdates } = useApp();
+  const [isDark, setIsDark] = useState(false);
+
+  // Resetar flag de atualizações quando a página for acessada
+  useEffect(() => {
+    if (settings?.awardsHasUpdates === true) {
+      resetAwardsUpdates();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas uma vez quando o componente montar
+
+  // Detectar tema claro/escuro
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+    checkTheme();
+    
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
+    return () => observer.disconnect();
+  }, []);
+
+  // Cores do grid baseadas no tema
+  const gridColor = isDark ? '#334155' : '#e2e8f0';
+  const tickColor = isDark ? '#94a3b8' : '#64748b';
 
   const getDesignerColor = (designerId: string) => {
     const designer = users.find(u => u.id === designerId);
@@ -45,69 +123,225 @@ export const DesignerPremiacoes: React.FC = () => {
       .slice(0, 5);
   }, [awards, users]);
 
+  // Função para obter cor do designer (mesma lógica da Dashboard)
+  const getDesignerColorForChart = (designerId: string): string => {
+    const designer = users.find(u => u.id === designerId);
+    if (designer?.avatarColor) return designer.avatarColor;
+    const avatarUrl = designer?.avatarUrl || '';
+    const bgMatch = avatarUrl.match(/background=([a-fA-F0-9]{6})/);
+    if (bgMatch) return `#${bgMatch[1]}`;
+    const colors = ['#4F46E5', '#06b6d4', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6'];
+    const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
+    const index = designers.findIndex(d => d.id === designerId);
+    return colors[index % colors.length];
+  };
+
+  // Dados do gráfico usando a mesma lógica da Dashboard (mês atual)
+  const chartData = useMemo(() => {
+    if (!settings.showAwardsChart) return [];
+
+    // Filtrar apenas o mês atual (mesma lógica da Dashboard)
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+
+    // Filtrar demandas do mês atual
+    const filteredDemands = demands.filter(d => 
+      d.timestamp >= currentMonthStart && 
+      d.timestamp <= currentMonthEnd
+    );
+
+    // Obter designers ativos
+    const activeDesigners = users.filter(u => u.role === 'DESIGNER' && u.active);
+
+    // Agrupar por designer (mesma lógica da Dashboard)
+    return activeDesigners.map(designer => {
+      const designerDemands = filteredDemands.filter(d => d.userId === designer.id);
+      const points = designerDemands.reduce((acc, d) => acc + d.totalPoints, 0);
+      
+      return {
+        name: designer.name.split(' - ')[1] || designer.name,
+        pontos: points,
+        color: getDesignerColorForChart(designer.id)
+      };
+    }).filter(d => d.pontos > 0).sort((a, b) => b.pontos - a.pontos); // Ordenar por pontos (maior para menor)
+  }, [users, demands, settings.showAwardsChart]);
+
+  // Próxima premiação (imagem grande configurada pelo admin)
+  const nextAwardImage = settings.nextAwardImage;
+  const motivationalMessage = settings.motivationalMessage;
+  const motivationalMessageEnabled = settings.motivationalMessageEnabled;
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Premiacoes</h1>
+        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Premiações</h1>
         <p className="text-slate-500 dark:text-slate-400 mt-1">
           Confira os vencedores mensais
         </p>
       </div>
 
+      {/* Mensagem Motivacional */}
+      {motivationalMessageEnabled && motivationalMessage && (
+        <div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 rounded-2xl p-5 border border-amber-200 dark:border-amber-800">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-amber-200 dark:bg-amber-800 rounded-lg flex-shrink-0">
+              <MessageSquare className="text-amber-600 dark:text-amber-400" size={20} />
+            </div>
+            <p className="text-slate-800 dark:text-slate-200 font-medium">
+              {motivationalMessage}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Card especial se o designer tem trofeu */}
       {myAwards.length > 0 && (
-        <div className="relative overflow-hidden bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 rounded-2xl p-6 text-white">
-          <div className="absolute top-0 right-0 opacity-10">
-            <Trophy size={200} />
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl p-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-100 dark:bg-amber-900/20 rounded-lg">
+              <Crown className="text-amber-600 dark:text-amber-400" size={18} />
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                Parabéns!
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 font-normal">
+                Você é um vencedor
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+              <Trophy size={16} />
+              <span className="text-sm font-medium">{myAwards.length} {myAwards.length === 1 ? 'Troféu' : 'Troféus'}</span>
+            </div>
           </div>
-          <div className="absolute -top-10 -left-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
-          <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-3xl" />
-          
-          <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-3 bg-white/20 rounded-xl backdrop-blur-sm">
-                <Crown className="text-white" size={28} />
-              </div>
-              <div>
-                <h2 className="text-xl font-bold">Parabens!</h2>
-                <p className="text-white/80">Voce e um vencedor!</p>
-              </div>
+          <div className="mt-3 pt-3 border-t border-amber-200/50 dark:border-amber-800/20">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Última premiação: <span className="text-slate-600 dark:text-slate-300">{myAwards[0]?.month || ''}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Layout duas colunas: Imagem grande da próxima premiação + Informações */}
+      {nextAwardImage && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+          <div className="grid md:grid-cols-2 gap-0">
+            {/* Coluna Esquerda: Imagem Grande */}
+            <div className="bg-slate-100 dark:bg-slate-800 flex items-center justify-center p-4 md:p-6 min-h-[300px] md:min-h-[400px]">
+              <img 
+                src={nextAwardImage} 
+                alt="Próxima premiação" 
+                className="w-full h-auto max-h-[400px] md:max-h-[500px] object-contain rounded-lg"
+                style={{ maxWidth: '100%' }}
+              />
             </div>
 
-            <div className="flex items-center gap-4 mt-4">
-              <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full backdrop-blur-sm">
-                <Trophy size={20} />
-                <span className="font-semibold">{myAwards.length} {myAwards.length === 1 ? 'Trofeu' : 'Trofeus'}</span>
-              </div>
-              <div className="flex -space-x-1">
-                {myAwards.slice(0, 3).map((a) => (
-                  <div 
-                    key={a.id}
-                    className="w-8 h-8 bg-white/30 rounded-full flex items-center justify-center border-2 border-white/50 backdrop-blur-sm"
-                    title={a.month}
-                  >
-                    <Star size={14} className="text-white" />
-                  </div>
-                ))}
-                {myAwards.length > 3 && (
-                  <div className="w-8 h-8 bg-white/30 rounded-full flex items-center justify-center border-2 border-white/50 backdrop-blur-sm text-xs font-semibold">
-                    +{myAwards.length - 3}
+            {/* Coluna Direita: Informações */}
+            <div className="p-4 md:p-6 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 text-amber-500 mb-4">
+                  <Sparkles size={20} />
+                  <span className="text-sm font-medium">Próxima Premiação</span>
+                </div>
+                
+                {latestAward && (
+                  <>
+                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2">
+                      Vencedor de {latestAward.month}
+                    </h3>
+                    <div className="flex items-center gap-3 mb-4">
+                      <div
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                        style={{ backgroundColor: getDesignerColor(latestAward.designerId) }}
+                      >
+                        {getDesignerInitials(latestAward.designerName)}
+                      </div>
+                      <div>
+                        <p className="font-semibold text-slate-900 dark:text-white">
+                          {latestAward.designerName.split(' - ')[1] || latestAward.designerName}
+                        </p>
+                        {latestAward.description && (
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">
+                            {latestAward.description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Gráfico de Pontos do Mês Atual (mesma lógica da Dashboard) */}
+                {settings.showAwardsChart && (
+                  <div className="mt-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <TrendingUp className="text-indigo-500" size={18} />
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
+                        Pontos do Mês Atual
+                      </h4>
+                    </div>
+                    {chartData.length > 0 ? (
+                      <div className="h-40">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartData} barCategoryGap="20%">
+                            <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                            <XAxis 
+                              dataKey="name" 
+                              tick={{ fill: tickColor, fontSize: 11 }} 
+                              axisLine={{ stroke: gridColor }}
+                              tickLine={false}
+                              angle={-30}
+                              textAnchor="end"
+                              height={70}
+                              interval={0}
+                            />
+                            <YAxis 
+                              tick={{ fill: tickColor, fontSize: 12 }} 
+                              axisLine={false}
+                              tickLine={false}
+                            />
+                            <Tooltip 
+                              content={
+                                <CustomTooltip 
+                                  isDark={isDark} 
+                                  formatter={(value) => [value, 'Pontos']}
+                                />
+                              }
+                              cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}
+                            />
+                            <Bar 
+                              dataKey="pontos" 
+                              radius={[6, 6, 0, 0]}
+                              maxBarSize={80}
+                              style={{ transition: 'opacity 150ms ease' }}
+                            >
+                              {chartData.map((entry, index) => (
+                                <Cell 
+                                  key={`cell-${index}`} 
+                                  fill={entry.color}
+                                />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    ) : (
+                      <div className="h-32 flex items-center justify-center bg-slate-50 dark:bg-slate-800 rounded-lg">
+                        <p className="text-sm text-slate-500 dark:text-slate-400">
+                          Sem dados para o período selecionado
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
-            </div>
-
-            <div className="mt-4 pt-4 border-t border-white/20">
-              <p className="text-sm text-white/80">
-                Ultima premiacao: <span className="text-white font-medium">{myAwards[0]?.month || ''}</span>
-              </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Destaque da premiacao atual/mais recente */}
-      {latestAward && (
+      {/* Destaque do vencedor mais recente (se não houver imagem grande) */}
+      {!nextAwardImage && latestAward && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           {latestAward.imageUrl ? (
             <div className="relative h-64 bg-slate-100 dark:bg-slate-800">
@@ -170,6 +404,7 @@ export const DesignerPremiacoes: React.FC = () => {
         </div>
       )}
 
+      {/* Ranking e Histórico */}
       <div className="grid md:grid-cols-3 gap-6">
         {/* Ranking */}
         {ranking.length > 0 && (
@@ -210,18 +445,18 @@ export const DesignerPremiacoes: React.FC = () => {
           </div>
         )}
 
-        {/* Lista de vencedores anteriores */}
+        {/* Histórico de vencedores */}
         <div className={`${ranking.length > 0 ? 'md:col-span-2' : 'md:col-span-3'} bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-5`}>
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="text-slate-400" size={20} />
-            <h3 className="font-semibold text-slate-900 dark:text-white">Historico de Vencedores</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white">Histórico de Vencedores</h3>
           </div>
           
           {awards.length === 0 ? (
             <div className="text-center py-8">
               <Trophy className="mx-auto text-slate-300 dark:text-slate-600 mb-3" size={40} />
               <p className="text-slate-500 dark:text-slate-400">
-                Nenhuma premiacao registrada ainda
+                Nenhuma premiação registrada ainda
               </p>
             </div>
           ) : (
@@ -254,7 +489,7 @@ export const DesignerPremiacoes: React.FC = () => {
                       </p>
                       {award.designerId === currentUser?.id && (
                         <span className="text-xs bg-amber-200 dark:bg-amber-800 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">
-                          Voce
+                          Você
                         </span>
                       )}
                     </div>
@@ -270,6 +505,7 @@ export const DesignerPremiacoes: React.FC = () => {
           )}
         </div>
       </div>
+
     </div>
   );
 };

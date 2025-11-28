@@ -36,9 +36,8 @@ export const DesignerLessons: React.FC = () => {
     return null;
   };
 
-  // Obter thumbnail final (customizada ou automática do YouTube)
+  // Obter thumbnail automática do YouTube
   const getLessonThumbnail = (lesson: typeof lessons[0]) => {
-    if (lesson.thumbnailUrl) return lesson.thumbnailUrl;
     return getYoutubeThumbnail(lesson.videoUrl);
   };
 

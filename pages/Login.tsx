@@ -105,7 +105,7 @@ export const Login: React.FC = () => {
               <span className="text-brand-600">MIDIA</span>
             </h1>
             <p className="text-slate-500 dark:text-slate-400 mt-2">
-              Faca login para continuar
+              Faça login para continuar
             </p>
           </div>
 

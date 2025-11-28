@@ -53,7 +53,7 @@ export const DesignerFeedbacks: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Feedbacks</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">
             {unviewedCount > 0 
-              ? `Você tem ${unviewedCount} feedback(s) não visualizado(s)`
+              ? `Você tem ${unviewedCount} feedback${unviewedCount !== 1 ? 's' : ''} não visualizado${unviewedCount !== 1 ? 's' : ''}`
               : 'Todos os feedbacks foram visualizados'}
           </p>
         </div>

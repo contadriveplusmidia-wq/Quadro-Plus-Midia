@@ -73,7 +73,6 @@ export interface Lesson {
   title: string;
   description?: string;
   videoUrl: string;
-  thumbnailUrl?: string; // URL ou Base64 da thumbnail
   orderIndex: number;
   createdAt: number;
 }
@@ -96,12 +95,26 @@ export interface Award {
   createdAt: number;
 }
 
+export interface Tag {
+  id: string;
+  name: string;
+  color?: string;
+  createdAt: number;
+}
+
+export interface LinkTag {
+  id: string;
+  linkId: string;
+  tagId: string;
+}
+
 export interface UsefulLink {
   id: string;
   title: string;
   url: string;
   imageUrl?: string;
   createdAt: number;
+  tags?: Tag[]; // Tags associadas ao link
 }
 
 export type TimeFilter = 'today' | 'yesterday' | 'weekly' | 'monthly' | 'yearly' | 'custom';
@@ -117,7 +130,12 @@ export interface SystemSettings {
   brandTitle?: string;
   loginSubtitle?: string;
   variationPoints?: number; // Global point value for variations
-  dailyGoal?: number; // Meta diária de artes para designers
+  motivationalMessage?: string; // Mensagem motivacional para premiações
+  motivationalMessageEnabled?: boolean; // Ativar/desativar mensagem motivacional
+  nextAwardImage?: string; // Imagem grande da próxima premiação (Base64 or URL)
+  chartEnabled?: boolean; // Ativar/desativar gráfico no painel do designer
+  showAwardsChart?: boolean; // Ativar/desativar gráfico de pontos na página de premiações
+  awardsHasUpdates?: boolean; // Flag para indicar novidades na página de premiações
 }
 
 // Performance status types

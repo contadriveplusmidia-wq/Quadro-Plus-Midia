@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Trophy, X, Trash2, Calendar, Upload, Crown, Star, AlertCircle } from 'lucide-react';
+import { Trophy, X, Trash2, Calendar, Upload, Crown, Star, AlertCircle, MessageSquare, Image, BarChart3, Save } from 'lucide-react';
 
 const MONTHS = [
   { value: 'Janeiro', label: 'Janeiro' },
   { value: 'Fevereiro', label: 'Fevereiro' },
-  { value: 'Marco', label: 'Março' },
+  { value: 'Março', label: 'Março' },
   { value: 'Abril', label: 'Abril' },
   { value: 'Maio', label: 'Maio' },
   { value: 'Junho', label: 'Junho' },
@@ -18,7 +18,7 @@ const MONTHS = [
 ];
 
 export const AdminPremiacoes: React.FC = () => {
-  const { users, awards, addAward, deleteAward } = useApp();
+  const { users, awards, addAward, deleteAward, settings, updateSettings, resetAwardsUpdates } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [selectedDesigner, setSelectedDesigner] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -27,8 +27,33 @@ export const AdminPremiacoes: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
+  // Configurações de premiação
+  const [motivationalMessage, setMotivationalMessage] = useState(settings.motivationalMessage || '');
+  const [motivationalMessageEnabled, setMotivationalMessageEnabled] = useState(settings.motivationalMessageEnabled || false);
+  const [nextAwardImage, setNextAwardImage] = useState(settings.nextAwardImage || '');
+  const [chartEnabled, setChartEnabled] = useState(settings.chartEnabled !== undefined ? settings.chartEnabled : true);
+  const [showAwardsChart, setShowAwardsChart] = useState(settings.showAwardsChart || false);
+  const [savingSettings, setSavingSettings] = useState(false);
+
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
   const currentYear = new Date().getFullYear();
+
+  // Resetar flag de atualizações quando a página for acessada
+  useEffect(() => {
+    if (settings?.awardsHasUpdates === true) {
+      resetAwardsUpdates();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas uma vez quando o componente montar
+
+  // Carregar configurações quando settings mudarem
+  useEffect(() => {
+    setMotivationalMessage(settings.motivationalMessage || '');
+    setMotivationalMessageEnabled(settings.motivationalMessageEnabled || false);
+    setNextAwardImage(settings.nextAwardImage || '');
+    setChartEnabled(settings.chartEnabled !== undefined ? settings.chartEnabled : true);
+    setShowAwardsChart(settings.showAwardsChart || false);
+  }, [settings]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -48,6 +73,39 @@ export const AdminPremiacoes: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
+  const handleNextAwardImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 1000000) {
+      alert('Imagem muito grande. Use uma imagem menor que 1MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setNextAwardImage(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveSettings = async () => {
+    setSavingSettings(true);
+    try {
+      await updateSettings({
+        motivationalMessage,
+        motivationalMessageEnabled,
+        nextAwardImage,
+        chartEnabled,
+        showAwardsChart
+      });
+    } catch (err) {
+      console.error('Erro ao salvar configurações:', err);
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!selectedDesigner || !selectedMonth) {
       setError('Selecione o designer e o mês');
@@ -64,7 +122,7 @@ export const AdminPremiacoes: React.FC = () => {
     setSaving(true);
 
     try {
-      const success = await addAward({
+      const result = await addAward({
         designerId: selectedDesigner,
         designerName: designer.name,
         month: selectedMonth,
@@ -72,14 +130,14 @@ export const AdminPremiacoes: React.FC = () => {
         imageUrl: imageUrl || undefined
       });
 
-      if (success) {
+      if (result.success) {
         setShowModal(false);
         resetForm();
       } else {
-        setError('Erro ao salvar premiação. Verifique se a tabela awards existe no banco de dados.');
+        setError(result.error || 'Erro ao salvar premiação. Verifique se a tabela awards existe no banco de dados.');
       }
-    } catch (err) {
-      setError('Erro ao salvar premiação. Tente novamente.');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao salvar premiação. Tente novamente.');
       console.error(err);
     } finally {
       setSaving(false);
@@ -129,6 +187,154 @@ export const AdminPremiacoes: React.FC = () => {
           <Crown size={20} />
           <span>Nova Premiação</span>
         </button>
+      </div>
+
+      {/* Configurações de Premiação */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+          <Crown className="text-amber-500" size={20} />
+          Configurações de Premiação
+        </h2>
+
+        <div className="space-y-6">
+          {/* Mensagem Motivacional */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                Mensagem Motivacional
+              </label>
+              <button
+                onClick={() => {
+                  setMotivationalMessageEnabled(!motivationalMessageEnabled);
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  motivationalMessageEnabled ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    motivationalMessageEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+            <textarea
+              value={motivationalMessage}
+              onChange={(e) => setMotivationalMessage(e.target.value)}
+              rows={3}
+              disabled={!motivationalMessageEnabled}
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg resize-none text-slate-900 dark:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              placeholder="Ex: Parabéns aos vencedores! Continue se esforçando para alcançar seus objetivos!"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Esta mensagem aparecerá no topo da página de premiações dos designers
+            </p>
+          </div>
+
+          {/* Imagem da Próxima Premiação */}
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+              Imagem Grande da Próxima Premiação
+            </label>
+            <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors overflow-hidden">
+              {nextAwardImage ? (
+                <img src={nextAwardImage} alt="Preview" className="w-full h-full object-contain" />
+              ) : (
+                <>
+                  <Image className="text-slate-400 mb-2" size={40} />
+                  <span className="text-sm text-slate-500">Clique para fazer upload</span>
+                  <span className="text-xs text-slate-400 mt-1">Máx. 1MB</span>
+                </>
+              )}
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleNextAwardImageUpload}
+                className="hidden"
+              />
+            </label>
+            {nextAwardImage && (
+              <button
+                type="button"
+                onClick={() => setNextAwardImage('')}
+                className="mt-2 text-xs text-red-500 hover:text-red-600"
+              >
+                Remover imagem
+              </button>
+            )}
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Esta imagem será exibida em destaque na página de premiações dos designers
+            </p>
+          </div>
+
+          {/* Ativar/Desativar Gráfico no Painel do Designer */}
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Exibir Gráfico no Painel do Designer
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Mostra um mini-gráfico com os pontos do mês atual
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setChartEnabled(!chartEnabled);
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  chartEnabled ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    chartEnabled ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Ativar/Desativar Gráfico de Premiações */}
+          <div>
+            <div className="flex items-center justify-between">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Exibir Gráfico de Pontos na Página de Premiações
+                </label>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Mostra um gráfico com a soma de pontos de cada designer no mês atual
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAwardsChart(!showAwardsChart);
+                }}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  showAwardsChart ? 'bg-amber-500' : 'bg-slate-300 dark:bg-slate-600'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    showAwardsChart ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Botão Salvar Configurações */}
+          <div className="pt-4 border-t border-slate-200 dark:border-slate-800">
+            <button
+              onClick={handleSaveSettings}
+              disabled={savingSettings}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              <Save size={18} />
+              {savingSettings ? 'Salvando...' : 'Salvar Configurações'}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Estatísticas rápidas */}

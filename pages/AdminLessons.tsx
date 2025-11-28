@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, X, Trash2, GraduationCap, Edit2, Play, GripVertical, Image, Upload, Link } from 'lucide-react';
+import { Plus, X, Trash2, GraduationCap, Edit2, Play } from 'lucide-react';
 
 export const AdminLessons: React.FC = () => {
   const { lessons, users, lessonProgress, addLesson, updateLesson, deleteLesson } = useApp();
@@ -9,8 +9,6 @@ export const AdminLessons: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
-  const [thumbnailUrl, setThumbnailUrl] = useState('');
-  const [thumbnailMode, setThumbnailMode] = useState<'auto' | 'url' | 'upload'>('auto');
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -26,16 +24,10 @@ export const AdminLessons: React.FC = () => {
   const handleSubmit = async () => {
     if (!title || !videoUrl) return;
 
-    // Determinar thumbnail final
-    let finalThumbnail = thumbnailUrl;
-    if (thumbnailMode === 'auto' || !thumbnailUrl) {
-      finalThumbnail = getYoutubeThumbnail(videoUrl) || '';
-    }
-
     if (editingId) {
-      await updateLesson(editingId, { title, description, videoUrl, thumbnailUrl: finalThumbnail });
+      await updateLesson(editingId, { title, description, videoUrl });
     } else {
-      await addLesson({ title, description, videoUrl, thumbnailUrl: finalThumbnail });
+      await addLesson({ title, description, videoUrl });
     }
 
     setShowModal(false);
@@ -47,8 +39,6 @@ export const AdminLessons: React.FC = () => {
     setTitle(lesson.title);
     setDescription(lesson.description || '');
     setVideoUrl(lesson.videoUrl);
-    setThumbnailUrl(lesson.thumbnailUrl || '');
-    setThumbnailMode(lesson.thumbnailUrl ? 'url' : 'auto');
     setShowModal(true);
   };
 
@@ -63,20 +53,6 @@ export const AdminLessons: React.FC = () => {
     setTitle('');
     setDescription('');
     setVideoUrl('');
-    setThumbnailUrl('');
-    setThumbnailMode('auto');
-  };
-
-  const handleThumbnailUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setThumbnailUrl(reader.result as string);
-      setThumbnailMode('upload');
-    };
-    reader.readAsDataURL(file);
   };
 
   const getYoutubeThumbnail = (url: string) => {
@@ -87,9 +63,8 @@ export const AdminLessons: React.FC = () => {
     return null;
   };
 
-  // Obter thumbnail final (customizada ou automática do YouTube)
+  // Obter thumbnail automática do YouTube
   const getLessonThumbnail = (lesson: typeof lessons[0]) => {
-    if (lesson.thumbnailUrl) return lesson.thumbnailUrl;
     return getYoutubeThumbnail(lesson.videoUrl);
   };
 
@@ -258,114 +233,24 @@ export const AdminLessons: React.FC = () => {
                 />
               </div>
 
-              {/* Thumbnail */}
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                  Thumbnail
-                </label>
-                
-                {/* Tabs para tipo de thumbnail */}
-                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1 mb-3">
-                  <button
-                    type="button"
-                    onClick={() => { setThumbnailMode('auto'); setThumbnailUrl(''); }}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      thumbnailMode === 'auto'
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    <Play size={14} />
-                    Auto (YouTube)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setThumbnailMode('url')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      thumbnailMode === 'url'
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    <Link size={14} />
-                    URL
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setThumbnailMode('upload')}
-                    className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                      thumbnailMode === 'upload'
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500 dark:text-slate-400'
-                    }`}
-                  >
-                    <Upload size={14} />
-                    Upload
-                  </button>
-                </div>
-
-                {thumbnailMode === 'auto' && (
-                  <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-lg p-3">
-                    A thumbnail será extraída automaticamente do YouTube
-                    {videoUrl && getYoutubeThumbnail(videoUrl) && (
-                      <img 
-                        src={getYoutubeThumbnail(videoUrl)!} 
-                        alt="Preview" 
-                        className="mt-2 w-full h-24 object-cover rounded-lg"
-                      />
-                    )}
-                  </div>
-                )}
-
-                {thumbnailMode === 'url' && (
-                  <div>
-                    <input
-                      type="text"
-                      value={thumbnailUrl}
-                      onChange={(e) => setThumbnailUrl(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
-                      placeholder="https://exemplo.com/imagem.jpg"
+              {/* Preview da thumbnail automática */}
+              {videoUrl && getYoutubeThumbnail(videoUrl) && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    Preview da Thumbnail (automática do YouTube)
+                  </label>
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3">
+                    <img 
+                      src={getYoutubeThumbnail(videoUrl)!} 
+                      alt="Preview" 
+                      className="w-full h-32 object-cover rounded-lg"
                     />
-                    {thumbnailUrl && (
-                      <img 
-                        src={thumbnailUrl} 
-                        alt="Preview" 
-                        className="mt-2 w-full h-24 object-cover rounded-lg"
-                      />
-                    )}
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                      A thumbnail será extraída automaticamente do YouTube
+                    </p>
                   </div>
-                )}
-
-                {thumbnailMode === 'upload' && (
-                  <div>
-                    <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors overflow-hidden">
-                      {thumbnailUrl ? (
-                        <img src={thumbnailUrl} alt="Preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <>
-                          <Image className="text-slate-400 mb-1" size={24} />
-                          <span className="text-xs text-slate-500">Clique para fazer upload</span>
-                        </>
-                      )}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleThumbnailUpload}
-                        className="hidden"
-                      />
-                    </label>
-                    {thumbnailUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setThumbnailUrl('')}
-                        className="mt-2 text-xs text-red-500 hover:text-red-600"
-                      >
-                        Remover imagem
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-slate-200 dark:border-slate-800">

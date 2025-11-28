@@ -1,15 +1,38 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
 import { Link2, ExternalLink, Globe, Search } from 'lucide-react';
+import { Tag as TagComponent } from '../components/Tag';
 
 export const DesignerLinks: React.FC = () => {
-  const { usefulLinks } = useApp();
+  const { usefulLinks, tags } = useApp();
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [selectedTagIds, setSelectedTagIds] = React.useState<string[]>([]);
 
-  const filteredLinks = usefulLinks.filter(link =>
-    link.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    link.url.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredLinks = usefulLinks.filter(link => {
+    // Filtro por busca (título, URL ou tags)
+    const matchesSearch = !searchTerm || 
+      link.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      link.url.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (link.tags && link.tags.some(tag => 
+        tag.name.toLowerCase().includes(searchTerm.toLowerCase())
+      ));
+    
+    // Filtro por tags (deve conter TODAS as tags selecionadas)
+    const matchesTags = selectedTagIds.length === 0 || 
+      (link.tags && selectedTagIds.every(tagId => 
+        link.tags!.some(tag => tag.id === tagId)
+      ));
+    
+    return matchesSearch && matchesTags;
+  });
+  
+  const toggleTagFilter = (tagId: string) => {
+    setSelectedTagIds(prev => 
+      prev.includes(tagId) 
+        ? prev.filter(id => id !== tagId)
+        : [...prev, tagId]
+    );
+  };
 
   const getDomain = (urlString: string) => {
     try {
@@ -28,7 +51,7 @@ export const DesignerLinks: React.FC = () => {
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Links Uteis</h1>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Links Úteis</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">
             Acesse ferramentas e recursos importantes
           </p>
@@ -49,7 +72,40 @@ export const DesignerLinks: React.FC = () => {
         )}
       </div>
 
-      {/* Estatistica */}
+      {/* Filtro por Tags */}
+      {tags.length > 0 && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Link2 size={18} className="text-slate-500 dark:text-slate-400" />
+            <h3 className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              Filtrar por tags:
+            </h3>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {tags.map(tag => {
+              const isSelected = selectedTagIds.includes(tag.id);
+              return (
+                <TagComponent
+                  key={tag.id}
+                  tag={tag}
+                  selected={isSelected}
+                  onClick={() => toggleTagFilter(tag.id)}
+                />
+              );
+            })}
+            {selectedTagIds.length > 0 && (
+              <button
+                onClick={() => setSelectedTagIds([])}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-sm font-medium bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Estatística */}
       <div className="bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-900/20 dark:to-blue-800/20 rounded-2xl p-5 border border-indigo-200 dark:border-indigo-800">
         <div className="flex items-center gap-3">
           <div className="p-3 bg-indigo-200 dark:bg-indigo-800 rounded-xl">
@@ -57,7 +113,7 @@ export const DesignerLinks: React.FC = () => {
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-900 dark:text-white">{usefulLinks.length}</p>
-            <p className="text-sm text-indigo-600 dark:text-indigo-400">Links disponiveis</p>
+            <p className="text-sm text-indigo-600 dark:text-indigo-400">Links disponíveis</p>
           </div>
         </div>
       </div>
@@ -67,10 +123,10 @@ export const DesignerLinks: React.FC = () => {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center">
           <Link2 className="mx-auto text-slate-300 dark:text-slate-600 mb-4" size={48} />
           <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
-            Nenhum link disponivel
+            Nenhum link disponível
           </h3>
           <p className="text-slate-500 dark:text-slate-400">
-            Em breve novos links serao adicionados
+            Em breve novos links serão adicionados
           </p>
         </div>
       ) : filteredLinks.length === 0 ? (
@@ -117,10 +173,18 @@ export const DesignerLinks: React.FC = () => {
                 <h3 className="font-semibold text-slate-900 dark:text-white mb-1 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
                   {link.title}
                 </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 truncate">
+                <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 truncate mb-2">
                   <Link2 size={14} className="flex-shrink-0" />
                   <span className="truncate">{getDomain(link.url)}</span>
                 </p>
+                {/* Tags do link */}
+                {link.tags && link.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {link.tags.map(tag => (
+                      <TagComponent key={tag.id} tag={tag} showIcon />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ))}

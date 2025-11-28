@@ -37,22 +37,24 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     f => f.designerId === currentUser?.id && !f.viewed
   ).length;
 
+  const awardsHasUpdates = settings?.awardsHasUpdates === true;
+
   const designerLinks = [
-    { to: '/designer', icon: LayoutDashboard, label: 'Dashboard', badge: 0 },
-    { to: '/designer/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: unviewedFeedbackCount },
-    { to: '/designer/lessons', icon: GraduationCap, label: 'Aulas', badge: 0 },
-    { to: '/designer/premiacoes', icon: Trophy, label: 'Premiações', badge: 0 },
-    { to: '/designer/links', icon: Link2, label: 'Links Úteis', badge: 0 },
+    { to: '/designer', icon: LayoutDashboard, label: 'Dashboard', badge: 0, hasUpdate: false },
+    { to: '/designer/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: unviewedFeedbackCount, hasUpdate: false },
+    { to: '/designer/lessons', icon: GraduationCap, label: 'Aulas', badge: 0, hasUpdate: false },
+    { to: '/designer/premiacoes', icon: Trophy, label: 'Premiações', badge: 0, hasUpdate: awardsHasUpdates },
+    { to: '/designer/links', icon: Link2, label: 'Links Úteis', badge: 0, hasUpdate: false },
   ];
 
   const adminLinks = [
-    { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', badge: 0 },
-    { to: '/admin/history', icon: History, label: 'Histórico', badge: 0 },
-    { to: '/admin/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: 0 },
-    { to: '/admin/lessons', icon: GraduationCap, label: 'Aulas', badge: 0 },
-    { to: '/admin/premiacoes', icon: Trophy, label: 'Premiações', badge: 0 },
-    { to: '/admin/links', icon: Link2, label: 'Links Úteis', badge: 0 },
-    { to: '/admin/settings', icon: Settings, label: 'Configurações', badge: 0 },
+    { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', badge: 0, hasUpdate: false },
+    { to: '/admin/history', icon: History, label: 'Histórico', badge: 0, hasUpdate: false },
+    { to: '/admin/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: 0, hasUpdate: false },
+    { to: '/admin/lessons', icon: GraduationCap, label: 'Aulas', badge: 0, hasUpdate: false },
+    { to: '/admin/premiacoes', icon: Trophy, label: 'Premiações', badge: 0, hasUpdate: awardsHasUpdates },
+    { to: '/admin/links', icon: Link2, label: 'Links Úteis', badge: 0, hasUpdate: false },
+    { to: '/admin/settings', icon: Settings, label: 'Configurações', badge: 0, hasUpdate: false },
   ];
 
   const links = isAdmin ? adminLinks : designerLinks;
@@ -103,6 +105,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     }`}>
                       {link.badge}
                     </span>
+                  )}
+                  {link.hasUpdate && link.badge === 0 && (
+                    <span className={`w-2 h-2 rounded-full ${
+                      isActive 
+                        ? 'bg-white' 
+                        : 'bg-red-500'
+                    }`} />
                   )}
                 </Link>
               );

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink } from '../types';
+import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag } from '../types';
 
 const API_URL = '';
 
@@ -16,6 +16,7 @@ interface AppContextType {
   lessonProgress: LessonProgress[];
   awards: Award[];
   usefulLinks: UsefulLink[];
+  tags: Tag[];
   settings: SystemSettings;
   adminFilters: AdminFilters;
   loading: boolean;
@@ -35,11 +36,14 @@ interface AppContextType {
   updateLesson: (id: string, lesson: Partial<Lesson>) => Promise<void>;
   deleteLesson: (id: string) => Promise<void>;
   markLessonViewed: (lessonId: string, designerId: string) => Promise<void>;
-  addAward: (award: Omit<Award, 'id' | 'createdAt'>) => Promise<boolean>;
+  addAward: (award: Omit<Award, 'id' | 'createdAt'>) => Promise<{ success: boolean; error?: string }>;
   deleteAward: (id: string) => Promise<void>;
   addUsefulLink: (link: Omit<UsefulLink, 'id' | 'createdAt'>) => Promise<boolean>;
   updateUsefulLink: (id: string, link: Partial<UsefulLink>) => Promise<void>;
   deleteUsefulLink: (id: string) => Promise<void>;
+  addTag: (tag: Omit<Tag, 'id' | 'createdAt'>) => Promise<void>;
+  updateTag: (id: string, tag: Partial<Tag>) => Promise<void>;
+  deleteTag: (id: string) => Promise<void>;
   addUser: (user: Omit<User, 'id'>) => Promise<void>;
   updateUser: (id: string, user: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
@@ -48,6 +52,7 @@ interface AppContextType {
   deleteArtType: (id: string) => Promise<void>;
   reorderArtTypes: (artTypes: ArtType[]) => Promise<void>;
   updateSettings: (settings: Partial<SystemSettings>) => Promise<void>;
+  resetAwardsUpdates: () => Promise<void>;
   refreshData: () => Promise<void>;
 }
 
@@ -84,6 +89,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [lessonProgress, setLessonProgress] = useState<LessonProgress[]>([]);
   const [awards, setAwards] = useState<Award[]>([]);
   const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({});
   const [loading, setLoading] = useState(true);
   const [adminFilters, setAdminFilters] = useState<AdminFilters>({
@@ -114,7 +120,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchData = async () => {
     try {
-      const [usersRes, artTypesRes, demandsRes, sessionsRes, feedbacksRes, lessonsRes, awardsRes, linksRes, settingsRes] = await Promise.all([
+      const [usersRes, artTypesRes, demandsRes, sessionsRes, feedbacksRes, lessonsRes, awardsRes, linksRes, tagsRes, settingsRes] = await Promise.all([
         fetch(`${API_URL}/api/users`),
         fetch(`${API_URL}/api/art-types`),
         fetch(`${API_URL}/api/demands`),
@@ -123,6 +129,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         fetch(`${API_URL}/api/lessons`),
         fetch(`${API_URL}/api/awards`),
         fetch(`${API_URL}/api/useful-links`),
+        fetch(`${API_URL}/api/tags`),
         fetch(`${API_URL}/api/settings`)
       ]);
       
@@ -134,6 +141,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (lessonsRes.ok) setLessons(await lessonsRes.json());
       if (awardsRes.ok) setAwards(await awardsRes.json());
       if (linksRes.ok) setUsefulLinks(await linksRes.json());
+      if (tagsRes.ok) setTags(await tagsRes.json());
       if (settingsRes.ok) setSettings(await settingsRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -207,6 +215,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     const newDemand = await res.json();
     setDemands(prev => [newDemand, ...prev]);
+    
+    // Se a demanda for do mês atual, recarregar settings para atualizar a flag de notificações
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
+    if (newDemand.timestamp >= currentMonthStart && newDemand.timestamp <= currentMonthEnd) {
+      try {
+        const settingsRes = await fetch(`${API_URL}/api/settings`);
+        if (settingsRes.ok) {
+          const updatedSettings = await settingsRes.json();
+          setSettings(updatedSettings);
+        }
+      } catch (settingsError) {
+        console.error('Erro ao recarregar settings:', settingsError);
+      }
+    }
   };
 
   const deleteDemand = async (id: string) => {
@@ -294,37 +318,81 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const addAward = async (award: Omit<Award, 'id' | 'createdAt'>): Promise<boolean> => {
+  const addAward = async (award: Omit<Award, 'id' | 'createdAt'>): Promise<{ success: boolean; error?: string }> => {
     try {
+      console.log('Enviando premiação:', award);
       const res = await fetch(`${API_URL}/api/awards`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(award)
       });
+      
+      console.log('Resposta recebida:', res.status, res.statusText);
+      
       if (!res.ok) {
-        console.error('Erro ao criar premiação:', await res.text());
-        return false;
+        // Tentar ler como texto primeiro
+        const text = await res.text();
+        console.error('Erro na resposta:', text);
+        
+        let errorData;
+        try {
+          errorData = JSON.parse(text);
+        } catch {
+          // Se não for JSON, usar o texto como erro
+          errorData = { error: text || `Erro HTTP ${res.status}: ${res.statusText}` };
+        }
+        
+        const errorMessage = errorData.error || errorData.details || `Erro ${res.status}: ${res.statusText}`;
+        console.error('Erro ao criar premiação:', errorMessage);
+        return { success: false, error: errorMessage };
       }
+      
       const newAward = await res.json();
+      console.log('Premiação criada com sucesso:', newAward);
       setAwards(prev => [newAward, ...prev]);
-      return true;
-    } catch (error) {
-      console.error('Erro ao criar premiação:', error);
-      return false;
+      
+      // Recarregar settings para atualizar a flag de notificações
+      try {
+        const settingsRes = await fetch(`${API_URL}/api/settings`);
+        if (settingsRes.ok) {
+          const updatedSettings = await settingsRes.json();
+          setSettings(updatedSettings);
+        }
+      } catch (settingsError) {
+        console.error('Erro ao recarregar settings:', settingsError);
+      }
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error('Erro ao criar premiação (catch):', error);
+      const errorMessage = error.message || error.toString() || 'Erro de conexão com o servidor';
+      return { success: false, error: errorMessage };
     }
   };
 
   const deleteAward = async (id: string) => {
     await fetch(`${API_URL}/api/awards/${id}`, { method: 'DELETE' });
     setAwards(prev => prev.filter(a => a.id !== id));
+    
+    // Recarregar settings para atualizar a flag de notificações
+    try {
+      const settingsRes = await fetch(`${API_URL}/api/settings`);
+      if (settingsRes.ok) {
+        const updatedSettings = await settingsRes.json();
+        setSettings(updatedSettings);
+      }
+    } catch (settingsError) {
+      console.error('Erro ao recarregar settings:', settingsError);
+    }
   };
 
-  const addUsefulLink = async (link: Omit<UsefulLink, 'id' | 'createdAt'>): Promise<boolean> => {
+  const addUsefulLink = async (link: Omit<UsefulLink, 'id' | 'createdAt'> & { tagIds?: string[] }): Promise<boolean> => {
     try {
+      const { tagIds, ...linkData } = link;
       const res = await fetch(`${API_URL}/api/useful-links`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(link)
+        body: JSON.stringify({ ...linkData, tagIds })
       });
       if (!res.ok) {
         console.error('Erro ao criar link:', await res.text());
@@ -339,18 +407,49 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const updateUsefulLink = async (id: string, link: Partial<UsefulLink>) => {
+  const updateUsefulLink = async (id: string, link: Partial<UsefulLink> & { tagIds?: string[] }) => {
+    const { tagIds, ...linkData } = link;
     await fetch(`${API_URL}/api/useful-links/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(link)
+      body: JSON.stringify({ ...linkData, tagIds })
     });
-    setUsefulLinks(prev => prev.map(l => l.id === id ? { ...l, ...link } : l));
+    // Recarregar links para obter tags atualizadas
+    const linksRes = await fetch(`${API_URL}/api/useful-links`);
+    if (linksRes.ok) {
+      setUsefulLinks(await linksRes.json());
+    } else {
+      setUsefulLinks(prev => prev.map(l => l.id === id ? { ...l, ...linkData } : l));
+    }
   };
 
   const deleteUsefulLink = async (id: string) => {
     await fetch(`${API_URL}/api/useful-links/${id}`, { method: 'DELETE' });
     setUsefulLinks(prev => prev.filter(l => l.id !== id));
+  };
+
+  const addTag = async (tag: Omit<Tag, 'id' | 'createdAt'>) => {
+    const res = await fetch(`${API_URL}/api/tags`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tag)
+    });
+    const newTag = await res.json();
+    setTags(prev => [...prev, newTag]);
+  };
+
+  const updateTag = async (id: string, tag: Partial<Tag>) => {
+    await fetch(`${API_URL}/api/tags/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(tag)
+    });
+    setTags(prev => prev.map(t => t.id === id ? { ...t, ...tag } : t));
+  };
+
+  const deleteTag = async (id: string) => {
+    await fetch(`${API_URL}/api/tags/${id}`, { method: 'DELETE' });
+    setTags(prev => prev.filter(t => t.id !== id));
   };
 
   const addUser = async (user: Omit<User, 'id'>) => {
@@ -416,7 +515,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newSettings)
     });
-    setSettings(prev => ({ ...prev, ...newSettings }));
+    // Recarregar settings do servidor para garantir sincronização (especialmente para awardsHasUpdates)
+    try {
+      const settingsRes = await fetch(`${API_URL}/api/settings`);
+      if (settingsRes.ok) {
+        const updatedSettings = await settingsRes.json();
+        setSettings(updatedSettings);
+      } else {
+        // Fallback: atualizar localmente se a requisição falhar
+        setSettings(prev => ({ ...prev, ...newSettings }));
+      }
+    } catch (settingsError) {
+      console.error('Erro ao recarregar settings:', settingsError);
+      // Fallback: atualizar localmente se a requisição falhar
+      setSettings(prev => ({ ...prev, ...newSettings }));
+    }
+  };
+
+  const resetAwardsUpdates = async () => {
+    await fetch(`${API_URL}/api/awards/reset-updates`, {
+      method: 'PUT'
+    });
+    // Recarregar settings do servidor para garantir sincronização
+    try {
+      const settingsRes = await fetch(`${API_URL}/api/settings`);
+      if (settingsRes.ok) {
+        const updatedSettings = await settingsRes.json();
+        setSettings(updatedSettings);
+      }
+    } catch (settingsError) {
+      console.error('Erro ao recarregar settings:', settingsError);
+      // Fallback: atualizar localmente se a requisição falhar
+      setSettings(prev => ({ ...prev, awardsHasUpdates: false }));
+    }
   };
 
   const refreshData = fetchData;
@@ -433,6 +564,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       lessonProgress,
       awards,
       usefulLinks,
+      tags,
       settings,
       adminFilters,
       loading,
@@ -457,6 +589,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       addUsefulLink,
       updateUsefulLink,
       deleteUsefulLink,
+      addTag,
+      updateTag,
+      deleteTag,
       addUser,
       updateUser,
       deleteUser,
@@ -465,6 +600,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       deleteArtType,
       reorderArtTypes,
       updateSettings,
+      resetAwardsUpdates,
       refreshData
     }}>
       {children}

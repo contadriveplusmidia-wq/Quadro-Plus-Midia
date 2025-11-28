@@ -83,11 +83,11 @@ export const DesignerDashboard: React.FC = () => {
   const totalArtsToday = todayDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
   const totalPointsToday = todayDemands.reduce((acc, d) => acc + d.totalPoints, 0);
 
-  // Calcular status de performance
-  const dailyGoal = settings.dailyGoal || 10;
+  // Calcular status de performance (meta fixa de 10 artes)
+  const dailyGoal = 10;
   const performanceStatus = useMemo(() => 
     getDailyPerformanceStatus(totalArtsToday, dailyGoal), 
-    [totalArtsToday, dailyGoal]
+    [totalArtsToday]
   );
 
   // Detectar tema dark/light
@@ -186,7 +186,7 @@ export const DesignerDashboard: React.FC = () => {
         </div>
         <div>
           <h1 className="text-xl font-bold text-slate-900 dark:text-white">
-            Ola, {currentUser?.name?.split(' - ')[1] || currentUser?.name?.split(' ')[0]}
+            Olá, {currentUser?.name?.split(' - ')[1] || currentUser?.name?.split(' ')[0]}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
             {dayName}, {dateStr}
@@ -322,7 +322,7 @@ export const DesignerDashboard: React.FC = () => {
 
             <div>
               <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
-                Variacoes
+                Variações
               </label>
               <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg">
                 <button 
@@ -413,7 +413,7 @@ export const DesignerDashboard: React.FC = () => {
         <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Clock className="text-slate-400" size={20} />
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Historico de Hoje</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Histórico de Hoje</h2>
           </div>
           <span className="text-sm text-slate-500 dark:text-slate-400">
             {todayDemands.length} entrega{todayDemands.length !== 1 ? 's' : ''}
@@ -424,11 +424,11 @@ export const DesignerDashboard: React.FC = () => {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800">
-                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Horario</th>
-                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descricao</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Horário</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descrição</th>
                 <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Artes</th>
                 <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pontos</th>
-                <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Acao</th>
+                <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ação</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -437,7 +437,7 @@ export const DesignerDashboard: React.FC = () => {
                   <td className="px-6 py-4 text-sm">{formatTime(todaySession.timestamp)}</td>
                   <td className="px-6 py-4 text-sm flex items-center gap-2">
                     <Clock size={16} />
-                    Inicio do Trabalho
+                    Início do Trabalho
                   </td>
                   <td className="px-6 py-4 text-center">-</td>
                   <td className="px-6 py-4 text-center">-</td>
@@ -463,7 +463,7 @@ export const DesignerDashboard: React.FC = () => {
                           </span>
                           {item.variationQuantity > 0 && (
                             <span className="px-2 py-0.5 bg-purple-100 dark:bg-purple-900/30 rounded text-xs text-purple-600 dark:text-purple-400">
-                              +{item.variationQuantity} {item.variationQuantity === 1 ? 'variacao' : 'variacoes'}
+                              +{item.variationQuantity} {item.variationQuantity === 1 ? 'variação' : 'variações'}
                             </span>
                           )}
                         </React.Fragment>
