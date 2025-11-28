@@ -88,6 +88,24 @@ CREATE TABLE IF NOT EXISTS system_settings (
   variation_points INTEGER DEFAULT 5
 );
 
+CREATE TABLE IF NOT EXISTS awards (
+  id VARCHAR(50) PRIMARY KEY,
+  designer_id VARCHAR(50) REFERENCES users(id),
+  designer_name VARCHAR(255) NOT NULL,
+  month VARCHAR(50) NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  created_at BIGINT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS useful_links (
+  id VARCHAR(50) PRIMARY KEY,
+  title VARCHAR(255) NOT NULL,
+  url TEXT NOT NULL,
+  image_url TEXT,
+  created_at BIGINT NOT NULL
+);
+
 -- Insert initial data
 
 -- Users (password is '123456' hashed with bcrypt)

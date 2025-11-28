@@ -494,6 +494,7 @@ app.get('/api/lessons', async (req: Request, res: Response) => {
       title: l.title,
       description: l.description,
       videoUrl: l.video_url,
+      thumbnailUrl: l.thumbnail_url,
       orderIndex: l.order_index,
       createdAt: parseInt(l.created_at)
     })));
@@ -504,16 +505,16 @@ app.get('/api/lessons', async (req: Request, res: Response) => {
 
 app.post('/api/lessons', async (req: Request, res: Response) => {
   try {
-    const { title, description, videoUrl } = req.body;
+    const { title, description, videoUrl, thumbnailUrl } = req.body;
     const id = `lesson-${Date.now()}`;
     const createdAt = Date.now();
     const maxOrder = await pool.query('SELECT COALESCE(MAX(order_index), -1) + 1 as next FROM lessons');
     const orderIndex = maxOrder.rows[0].next;
     await pool.query(
-      'INSERT INTO lessons (id, title, description, video_url, order_index, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
-      [id, title, description || '', videoUrl, orderIndex, createdAt]
+      'INSERT INTO lessons (id, title, description, video_url, thumbnail_url, order_index, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, title, description || '', videoUrl, thumbnailUrl || null, orderIndex, createdAt]
     );
-    return res.json({ id, title, description, videoUrl, orderIndex, createdAt });
+    return res.json({ id, title, description, videoUrl, thumbnailUrl, orderIndex, createdAt });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao criar aula' });
   }
@@ -522,10 +523,10 @@ app.post('/api/lessons', async (req: Request, res: Response) => {
 app.put('/api/lessons/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { title, description, videoUrl, orderIndex } = req.body;
+    const { title, description, videoUrl, thumbnailUrl, orderIndex } = req.body;
     await pool.query(
-      'UPDATE lessons SET title = COALESCE($1, title), description = COALESCE($2, description), video_url = COALESCE($3, video_url), order_index = COALESCE($4, order_index) WHERE id = $5',
-      [title, description, videoUrl, orderIndex, id]
+      'UPDATE lessons SET title = COALESCE($1, title), description = COALESCE($2, description), video_url = COALESCE($3, video_url), thumbnail_url = COALESCE($4, thumbnail_url), order_index = COALESCE($5, order_index) WHERE id = $6',
+      [title, description, videoUrl, thumbnailUrl, orderIndex, id]
     );
     return res.json({ success: true });
   } catch (error) {
@@ -587,7 +588,8 @@ app.get('/api/settings', async (req: Request, res: Response) => {
       logoUrl: s.logo_url,
       brandTitle: s.brand_title,
       loginSubtitle: s.login_subtitle,
-      variationPoints: s.variation_points
+      variationPoints: s.variation_points,
+      dailyGoal: s.daily_goal || 10
     });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar configurações' });
@@ -596,14 +598,126 @@ app.get('/api/settings', async (req: Request, res: Response) => {
 
 app.put('/api/settings', async (req: Request, res: Response) => {
   try {
-    const { logoUrl, brandTitle, loginSubtitle, variationPoints } = req.body;
+    const { logoUrl, brandTitle, loginSubtitle, variationPoints, dailyGoal } = req.body;
     await pool.query(
-      'UPDATE system_settings SET logo_url = COALESCE($1, logo_url), brand_title = COALESCE($2, brand_title), login_subtitle = COALESCE($3, login_subtitle), variation_points = COALESCE($4, variation_points) WHERE id = 1',
-      [logoUrl, brandTitle, loginSubtitle, variationPoints]
+      'UPDATE system_settings SET logo_url = COALESCE($1, logo_url), brand_title = COALESCE($2, brand_title), login_subtitle = COALESCE($3, login_subtitle), variation_points = COALESCE($4, variation_points), daily_goal = COALESCE($5, daily_goal) WHERE id = 1',
+      [logoUrl, brandTitle, loginSubtitle, variationPoints, dailyGoal]
     );
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao atualizar configurações' });
+  }
+});
+
+// ============ AWARDS ============
+app.get('/api/awards', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM awards ORDER BY created_at DESC');
+    return res.json(result.rows.map(a => ({
+      id: a.id,
+      designerId: a.designer_id,
+      designerName: a.designer_name,
+      month: a.month,
+      description: a.description,
+      imageUrl: a.image_url,
+      createdAt: parseInt(a.created_at)
+    })));
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao buscar premiações' });
+  }
+});
+
+app.post('/api/awards', async (req: Request, res: Response) => {
+  try {
+    const { designerId, designerName, month, description, imageUrl } = req.body;
+    
+    // Validação básica
+    if (!designerId || !designerName || !month) {
+      return res.status(400).json({ error: 'Campos obrigatórios: designerId, designerName, month' });
+    }
+    
+    const id = `award-${Date.now()}`;
+    const createdAt = Date.now();
+    await pool.query(
+      'INSERT INTO awards (id, designer_id, designer_name, month, description, image_url, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, designerId, designerName, month, description || '', imageUrl || null, createdAt]
+    );
+    return res.json({ id, designerId, designerName, month, description: description || '', imageUrl: imageUrl || null, createdAt });
+  } catch (error: any) {
+    console.error('Erro ao criar premiação:', error);
+    return res.status(500).json({ error: 'Erro ao criar premiação', details: error?.message });
+  }
+});
+
+app.delete('/api/awards/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM awards WHERE id = $1', [id]);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao remover premiação' });
+  }
+});
+
+// ============ USEFUL LINKS ============
+app.get('/api/useful-links', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query('SELECT * FROM useful_links ORDER BY created_at DESC');
+    return res.json(result.rows.map(l => ({
+      id: l.id,
+      title: l.title,
+      url: l.url,
+      imageUrl: l.image_url,
+      createdAt: parseInt(l.created_at)
+    })));
+  } catch (error) {
+    console.error('Erro ao buscar links:', error);
+    return res.status(500).json({ error: 'Erro ao buscar links' });
+  }
+});
+
+app.post('/api/useful-links', async (req: Request, res: Response) => {
+  try {
+    const { title, url, imageUrl } = req.body;
+    
+    if (!title || !url) {
+      return res.status(400).json({ error: 'Campos obrigatórios: title, url' });
+    }
+    
+    const id = `link-${Date.now()}`;
+    const createdAt = Date.now();
+    await pool.query(
+      'INSERT INTO useful_links (id, title, url, image_url, created_at) VALUES ($1, $2, $3, $4, $5)',
+      [id, title, url, imageUrl || null, createdAt]
+    );
+    return res.json({ id, title, url, imageUrl: imageUrl || null, createdAt });
+  } catch (error: any) {
+    console.error('Erro ao criar link:', error);
+    return res.status(500).json({ error: 'Erro ao criar link', details: error?.message });
+  }
+});
+
+app.put('/api/useful-links/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { title, url, imageUrl } = req.body;
+    await pool.query(
+      'UPDATE useful_links SET title = COALESCE($1, title), url = COALESCE($2, url), image_url = COALESCE($3, image_url) WHERE id = $4',
+      [title, url, imageUrl, id]
+    );
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao atualizar link' });
+  }
+});
+
+app.delete('/api/useful-links/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM useful_links WHERE id = $1', [id]);
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao remover link' });
   }
 });
 

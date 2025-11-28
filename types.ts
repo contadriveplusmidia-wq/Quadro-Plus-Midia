@@ -73,6 +73,7 @@ export interface Lesson {
   title: string;
   description?: string;
   videoUrl: string;
+  thumbnailUrl?: string; // URL ou Base64 da thumbnail
   orderIndex: number;
   createdAt: number;
 }
@@ -83,6 +84,24 @@ export interface LessonProgress {
   designerId: string;
   viewed: boolean;
   viewedAt?: number;
+}
+
+export interface Award {
+  id: string;
+  designerId: string;
+  designerName: string;
+  month: string; // Nome do mês (ex: "Janeiro", "Fevereiro")
+  description: string;
+  imageUrl?: string;
+  createdAt: number;
+}
+
+export interface UsefulLink {
+  id: string;
+  title: string;
+  url: string;
+  imageUrl?: string;
+  createdAt: number;
 }
 
 export type TimeFilter = 'today' | 'yesterday' | 'weekly' | 'monthly' | 'yearly' | 'custom';
@@ -98,4 +117,24 @@ export interface SystemSettings {
   brandTitle?: string;
   loginSubtitle?: string;
   variationPoints?: number; // Global point value for variations
+  dailyGoal?: number; // Meta diária de artes para designers
+}
+
+// Performance status types
+export type PerformanceStatus = 'success' | 'warning' | 'neutral';
+
+export interface DailyPerformanceResult {
+  status: PerformanceStatus;
+  percentage: number;
+  message: string;
+  colors: {
+    bg: string;
+    bgDark: string;
+    border: string;
+    borderDark: string;
+    text: string;
+    textDark: string;
+    accent: string;
+    accentDark: string;
+  };
 }

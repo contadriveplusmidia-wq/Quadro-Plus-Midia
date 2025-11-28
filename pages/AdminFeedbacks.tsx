@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Plus, X, Trash2, MessageSquare, Eye, EyeOff, ChevronDown, Upload, Image } from 'lucide-react';
+import { ImageModal } from '../components/ImageModal';
 
 export const AdminFeedbacks: React.FC = () => {
   const { currentUser, users, feedbacks, addFeedback, deleteFeedback } = useApp();
@@ -9,6 +10,7 @@ export const AdminFeedbacks: React.FC = () => {
   const [comment, setComment] = useState('');
   const [images, setImages] = useState<string[]>([]);
   const [filterDesigner, setFilterDesigner] = useState('all');
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -155,15 +157,13 @@ export const AdminFeedbacks: React.FC = () => {
                 {feedback.imageUrls && feedback.imageUrls.length > 0 && (
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     {feedback.imageUrls.map((url, idx) => (
-                      <a 
+                      <button 
                         key={idx} 
-                        href={url} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="block aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800"
+                        onClick={() => setSelectedImage(url)}
+                        className="block aspect-video rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800 cursor-pointer hover:opacity-80 transition-opacity"
                       >
                         <img src={url} alt={`Imagem ${idx + 1}`} className="w-full h-full object-cover" />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 )}
@@ -261,6 +261,14 @@ export const AdminFeedbacks: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedImage && (
+        <ImageModal 
+          isOpen={true}
+          src={selectedImage}
+          onClose={() => setSelectedImage(null)}
+        />
       )}
     </div>
   );

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters } from '../types';
+import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink } from '../types';
 
 const API_URL = '';
 
@@ -14,6 +14,8 @@ interface AppContextType {
   feedbacks: Feedback[];
   lessons: Lesson[];
   lessonProgress: LessonProgress[];
+  awards: Award[];
+  usefulLinks: UsefulLink[];
   settings: SystemSettings;
   adminFilters: AdminFilters;
   loading: boolean;
@@ -33,6 +35,11 @@ interface AppContextType {
   updateLesson: (id: string, lesson: Partial<Lesson>) => Promise<void>;
   deleteLesson: (id: string) => Promise<void>;
   markLessonViewed: (lessonId: string, designerId: string) => Promise<void>;
+  addAward: (award: Omit<Award, 'id' | 'createdAt'>) => Promise<boolean>;
+  deleteAward: (id: string) => Promise<void>;
+  addUsefulLink: (link: Omit<UsefulLink, 'id' | 'createdAt'>) => Promise<boolean>;
+  updateUsefulLink: (id: string, link: Partial<UsefulLink>) => Promise<void>;
+  deleteUsefulLink: (id: string) => Promise<void>;
   addUser: (user: Omit<User, 'id'>) => Promise<void>;
   updateUser: (id: string, user: Partial<User>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
@@ -75,6 +82,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [lessons, setLessons] = useState<Lesson[]>([]);
   const [lessonProgress, setLessonProgress] = useState<LessonProgress[]>([]);
+  const [awards, setAwards] = useState<Award[]>([]);
+  const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({});
   const [loading, setLoading] = useState(true);
   const [adminFilters, setAdminFilters] = useState<AdminFilters>({
@@ -105,13 +114,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchData = async () => {
     try {
-      const [usersRes, artTypesRes, demandsRes, sessionsRes, feedbacksRes, lessonsRes, settingsRes] = await Promise.all([
+      const [usersRes, artTypesRes, demandsRes, sessionsRes, feedbacksRes, lessonsRes, awardsRes, linksRes, settingsRes] = await Promise.all([
         fetch(`${API_URL}/api/users`),
         fetch(`${API_URL}/api/art-types`),
         fetch(`${API_URL}/api/demands`),
         fetch(`${API_URL}/api/work-sessions`),
         fetch(`${API_URL}/api/feedbacks`),
         fetch(`${API_URL}/api/lessons`),
+        fetch(`${API_URL}/api/awards`),
+        fetch(`${API_URL}/api/useful-links`),
         fetch(`${API_URL}/api/settings`)
       ]);
       
@@ -121,6 +132,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (sessionsRes.ok) setWorkSessions(await sessionsRes.json());
       if (feedbacksRes.ok) setFeedbacks(await feedbacksRes.json());
       if (lessonsRes.ok) setLessons(await lessonsRes.json());
+      if (awardsRes.ok) setAwards(await awardsRes.json());
+      if (linksRes.ok) setUsefulLinks(await linksRes.json());
       if (settingsRes.ok) setSettings(await settingsRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -281,6 +294,65 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
+  const addAward = async (award: Omit<Award, 'id' | 'createdAt'>): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_URL}/api/awards`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(award)
+      });
+      if (!res.ok) {
+        console.error('Erro ao criar premiação:', await res.text());
+        return false;
+      }
+      const newAward = await res.json();
+      setAwards(prev => [newAward, ...prev]);
+      return true;
+    } catch (error) {
+      console.error('Erro ao criar premiação:', error);
+      return false;
+    }
+  };
+
+  const deleteAward = async (id: string) => {
+    await fetch(`${API_URL}/api/awards/${id}`, { method: 'DELETE' });
+    setAwards(prev => prev.filter(a => a.id !== id));
+  };
+
+  const addUsefulLink = async (link: Omit<UsefulLink, 'id' | 'createdAt'>): Promise<boolean> => {
+    try {
+      const res = await fetch(`${API_URL}/api/useful-links`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(link)
+      });
+      if (!res.ok) {
+        console.error('Erro ao criar link:', await res.text());
+        return false;
+      }
+      const newLink = await res.json();
+      setUsefulLinks(prev => [newLink, ...prev]);
+      return true;
+    } catch (error) {
+      console.error('Erro ao criar link:', error);
+      return false;
+    }
+  };
+
+  const updateUsefulLink = async (id: string, link: Partial<UsefulLink>) => {
+    await fetch(`${API_URL}/api/useful-links/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(link)
+    });
+    setUsefulLinks(prev => prev.map(l => l.id === id ? { ...l, ...link } : l));
+  };
+
+  const deleteUsefulLink = async (id: string) => {
+    await fetch(`${API_URL}/api/useful-links/${id}`, { method: 'DELETE' });
+    setUsefulLinks(prev => prev.filter(l => l.id !== id));
+  };
+
   const addUser = async (user: Omit<User, 'id'>) => {
     const res = await fetch(`${API_URL}/api/users`, {
       method: 'POST',
@@ -359,6 +431,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       feedbacks,
       lessons,
       lessonProgress,
+      awards,
+      usefulLinks,
       settings,
       adminFilters,
       loading,
@@ -378,6 +452,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateLesson,
       deleteLesson,
       markLessonViewed,
+      addAward,
+      deleteAward,
+      addUsefulLink,
+      updateUsefulLink,
+      deleteUsefulLink,
       addUser,
       updateUser,
       deleteUser,

@@ -7,11 +7,15 @@ import { Layout } from './components/Layout';
 import { DesignerDashboard } from './pages/DesignerDashboard';
 import { DesignerFeedbacks } from './pages/DesignerFeedbacks';
 import { DesignerLessons } from './pages/DesignerLessons';
+import { DesignerPremiacoes } from './pages/DesignerPremiacoes';
+import { DesignerLinks } from './pages/DesignerLinks';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { AdminHistory } from './pages/AdminHistory';
 import { AdminSettings } from './pages/AdminSettings';
 import { AdminFeedbacks } from './pages/AdminFeedbacks';
 import { AdminLessons } from './pages/AdminLessons';
+import { AdminPremiacoes } from './pages/AdminPremiacoes';
+import { AdminLinks } from './pages/AdminLinks';
 
 // Private Route Component
 const PrivateRoute: React.FC<{ children: React.ReactElement, requiredRole?: 'ADM' | 'DESIGNER' }> = ({ children, requiredRole }) => {
@@ -50,6 +54,16 @@ const AppRoutes = () => {
           <DesignerLessons />
         </PrivateRoute>
       } />
+      <Route path="/designer/premiacoes" element={
+        <PrivateRoute requiredRole="DESIGNER">
+          <DesignerPremiacoes />
+        </PrivateRoute>
+      } />
+      <Route path="/designer/links" element={
+        <PrivateRoute requiredRole="DESIGNER">
+          <DesignerLinks />
+        </PrivateRoute>
+      } />
 
       {/* Admin Routes */}
       <Route path="/admin" element={
@@ -70,6 +84,16 @@ const AppRoutes = () => {
       <Route path="/admin/lessons" element={
         <PrivateRoute requiredRole="ADM">
           <AdminLessons />
+        </PrivateRoute>
+      } />
+      <Route path="/admin/premiacoes" element={
+        <PrivateRoute requiredRole="ADM">
+          <AdminPremiacoes />
+        </PrivateRoute>
+      } />
+      <Route path="/admin/links" element={
+        <PrivateRoute requiredRole="ADM">
+          <AdminLinks />
         </PrivateRoute>
       } />
       <Route path="/admin/settings" element={

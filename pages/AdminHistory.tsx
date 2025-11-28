@@ -2,10 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { Calendar, Clock, ChevronDown, Users, Filter } from 'lucide-react';
 import { TimeFilter, WorkSessionRow } from '../types';
+import { HistoryCharts } from '../components/HistoryCharts';
 
 export const AdminHistory: React.FC = () => {
   const { users, demands, workSessions, adminFilters, setAdminFilters } = useApp();
-  const [viewMode, setViewMode] = useState<'sessions' | 'demands'>('sessions');
+  const [viewMode, setViewMode] = useState<'sessions' | 'demands' | 'charts'>('sessions');
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -149,6 +150,16 @@ export const AdminHistory: React.FC = () => {
             >
               Demandas
             </button>
+            <button
+              onClick={() => setViewMode('charts')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                viewMode === 'charts'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              Gráficos
+            </button>
           </div>
 
           <div className="relative">
@@ -185,7 +196,9 @@ export const AdminHistory: React.FC = () => {
         </div>
       </div>
 
-      {viewMode === 'sessions' ? (
+      {viewMode === 'charts' ? (
+        <HistoryCharts demands={demands} designers={designers} />
+      ) : viewMode === 'sessions' ? (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full">

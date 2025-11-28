@@ -28,6 +28,20 @@ export const DesignerLessons: React.FC = () => {
     return url;
   };
 
+  const getYoutubeThumbnail = (url: string) => {
+    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s]+)/)?.[1];
+    if (videoId) {
+      return `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+    }
+    return null;
+  };
+
+  // Obter thumbnail final (customizada ou automática do YouTube)
+  const getLessonThumbnail = (lesson: typeof lessons[0]) => {
+    if (lesson.thumbnailUrl) return lesson.thumbnailUrl;
+    return getYoutubeThumbnail(lesson.videoUrl);
+  };
+
   const currentLesson = lessons.find(l => l.id === selectedLesson);
 
   return (
@@ -68,41 +82,75 @@ export const DesignerLessons: React.FC = () => {
         <div className="grid gap-4">
           {lessons.sort((a, b) => a.orderIndex - b.orderIndex).map((lesson, idx) => {
             const viewed = isLessonViewed(lesson.id);
+            const thumbnail = getLessonThumbnail(lesson);
+            
             return (
               <div 
                 key={lesson.id}
-                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6"
+                className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden"
               >
-                <div className="flex items-start gap-4">
-                  <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                    viewed 
-                      ? 'bg-green-100 dark:bg-green-900/30 text-green-600' 
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                  }`}>
-                    {viewed ? <CheckCircle size={24} /> : <Circle size={24} />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-slate-400">Aula {idx + 1}</span>
-                      {viewed && (
-                        <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 text-xs font-medium rounded-full">
-                          Assistida
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white mt-1">
-                      {lesson.title}
-                    </h3>
-                    {lesson.description && (
-                      <p className="text-slate-500 dark:text-slate-400 mt-2">{lesson.description}</p>
+                <div className="flex flex-col sm:flex-row">
+                  {/* Thumbnail */}
+                  <div 
+                    className="sm:w-60 h-36 sm:h-auto bg-slate-100 dark:bg-slate-800 flex-shrink-0 relative group cursor-pointer"
+                    onClick={() => handleWatch(lesson.id)}
+                  >
+                    {thumbnail ? (
+                      <img 
+                        src={thumbnail} 
+                        alt={lesson.title} 
+                        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105" 
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-brand-500 to-brand-700">
+                        <Play size={40} className="text-white/80" />
+                      </div>
                     )}
-                    <button
-                      onClick={() => handleWatch(lesson.id)}
-                      className="mt-4 flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
-                    >
-                      <Play size={18} />
-                      Assistir
-                    </button>
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                      <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Play size={24} className="text-brand-600 ml-1" />
+                      </div>
+                    </div>
+                    {viewed && (
+                      <div className="absolute top-2 right-2 bg-green-500 text-white p-1 rounded-full">
+                        <CheckCircle size={16} />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex-1 p-6">
+                    <div className="flex items-start gap-4">
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
+                        viewed 
+                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                      }`}>
+                        {viewed ? <CheckCircle size={24} /> : <Circle size={24} />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-slate-400">Aula {idx + 1}</span>
+                          {viewed && (
+                            <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-600 text-xs font-medium rounded-full">
+                              Assistida
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="text-lg font-semibold text-slate-900 dark:text-white mt-1">
+                          {lesson.title}
+                        </h3>
+                        {lesson.description && (
+                          <p className="text-slate-500 dark:text-slate-400 mt-2 line-clamp-2">{lesson.description}</p>
+                        )}
+                        <button
+                          onClick={() => handleWatch(lesson.id)}
+                          className="mt-4 flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                        >
+                          <Play size={18} />
+                          {viewed ? 'Assistir Novamente' : 'Assistir'}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

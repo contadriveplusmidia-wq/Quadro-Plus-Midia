@@ -27,6 +27,7 @@ export const AdminSettings: React.FC = () => {
   const [brandTitle, setBrandTitle] = useState(settings.brandTitle || '');
   const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || '');
   const [variationPoints, setVariationPoints] = useState(settings.variationPoints || 5);
+  const [dailyGoal, setDailyGoal] = useState(settings.dailyGoal || 10);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
 
   const [showUserModal, setShowUserModal] = useState(false);
@@ -44,7 +45,7 @@ export const AdminSettings: React.FC = () => {
 
   const handleSaveBrand = async () => {
     setSaving(true);
-    await updateSettings({ brandTitle, loginSubtitle, variationPoints, logoUrl });
+    await updateSettings({ brandTitle, loginSubtitle, variationPoints, dailyGoal, logoUrl });
     setSaving(false);
   };
 
@@ -145,11 +146,6 @@ export const AdminSettings: React.FC = () => {
     
     if (newPassword !== confirmPassword) {
       setPasswordMessage({ type: 'error', text: 'As senhas não conferem' });
-      return;
-    }
-    
-    if (newPassword.length < 4) {
-      setPasswordMessage({ type: 'error', text: 'A nova senha deve ter pelo menos 4 caracteres' });
       return;
     }
     
@@ -283,6 +279,22 @@ export const AdminSettings: React.FC = () => {
               onChange={(e) => setVariationPoints(parseInt(e.target.value) || 5)}
               className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Meta Diária de Artes
+            </label>
+            <input
+              type="number"
+              min="1"
+              value={dailyGoal}
+              onChange={(e) => setDailyGoal(parseInt(e.target.value) || 10)}
+              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Quantidade de artes que cada designer deve produzir por dia
+            </p>
           </div>
 
           <button

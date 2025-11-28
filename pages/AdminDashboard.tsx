@@ -1,18 +1,97 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown } from 'lucide-react';
+import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 type ChartMode = 'somaPoints' | 'somaArts' | 'mediaPoints' | 'mediaArts';
 type DateFilterType = 'hoje' | 'semana' | 'mes' | 'custom';
 
+// Componente de Tooltip customizado com tema
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color?: string; payload?: { color: string } }>;
+  label?: string;
+  isDark: boolean;
+  formatter?: (value: number, name: string) => [number | string, string];
+}
+
+const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, isDark, formatter }) => {
+  if (!active || !payload || payload.length === 0) return null;
+
+  return (
+    <div
+      className={`
+        px-3 py-2.5 rounded-md shadow-lg transition-all duration-150
+        ${isDark 
+          ? 'bg-gray-800/95 border border-gray-600/50' 
+          : 'bg-white/95 border border-gray-200'
+        }
+      `}
+    >
+      <p className={`text-xs font-semibold mb-1.5 ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>
+        {label}
+      </p>
+      <div className="space-y-1">
+        {payload.map((entry, index) => {
+          const [formattedValue, formattedName] = formatter 
+            ? formatter(entry.value, entry.name) 
+            : [entry.value, entry.name];
+          const color = entry.color || entry.payload?.color || '#3B82F6';
+          return (
+            <div key={index} className="flex items-center gap-2 text-xs">
+              <div 
+                className="w-2.5 h-2.5 rounded-full" 
+                style={{ backgroundColor: color }}
+              />
+              <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
+                {formattedName}:
+              </span>
+              <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                {formattedValue}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+};
+
 export const AdminDashboard: React.FC = () => {
-  const { users, demands, artTypes } = useApp();
+  const { users, demands, artTypes, refreshData } = useApp();
   const [selectedDesigner, setSelectedDesigner] = useState<string>('all');
   const [dateFilter, setDateFilter] = useState<DateFilterType>('semana');
-  const [chartMode, setChartMode] = useState<ChartMode>('somaPoints');
+  const [chartMode, setChartMode] = useState<ChartMode>('somaArts');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  // Detectar tema claro/escuro
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+    checkTheme();
+    
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    
+    return () => observer.disconnect();
+  }, []);
+
+  // Cores do grid baseadas no tema
+  const gridColor = isDark ? '#334155' : '#e2e8f0';
+  const tickColor = isDark ? '#94a3b8' : '#64748b';
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      await refreshData();
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -165,9 +244,22 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
-        <div className="flex items-center gap-2 mb-6">
-          <Filter className="text-brand-600" size={20} />
-          <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Visao Geral</h2>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2">
+            <Filter className="text-brand-600" size={20} />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Visao Geral</h2>
+          </div>
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+          >
+            <RefreshCw 
+              size={16} 
+              className={isRefreshing ? 'animate-spin' : ''} 
+            />
+            <span className="hidden sm:inline">Atualizar</span>
+          </button>
         </div>
 
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-6">
@@ -366,41 +458,35 @@ export const AdminDashboard: React.FC = () => {
         {chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={350}>
             <BarChart data={chartData} barCategoryGap="20%">
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
               <XAxis 
                 dataKey="name" 
-                tick={{ fill: '#64748b', fontSize: 12 }} 
-                axisLine={{ stroke: '#e2e8f0' }}
+                tick={{ fill: tickColor, fontSize: 12 }} 
+                axisLine={{ stroke: gridColor }}
                 tickLine={false}
               />
               <YAxis 
-                tick={{ fill: '#64748b', fontSize: 12 }} 
+                tick={{ fill: tickColor, fontSize: 12 }} 
                 axisLine={false}
                 tickLine={false}
               />
               <Tooltip 
-                contentStyle={{ 
-                  backgroundColor: '#1e293b',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#fff'
-                }}
-                itemStyle={{
-                  color: '#fff'
-                }}
-                labelStyle={{
-                  color: '#fff',
-                  fontWeight: 'bold'
-                }}
-                formatter={(value: number) => [
-                  chartMode.startsWith('media') ? value.toFixed(1) : value,
-                  chartMode.endsWith('Points') ? 'Pontos' : 'Artes'
-                ]}
+                content={
+                  <CustomTooltip 
+                    isDark={isDark} 
+                    formatter={(value, name) => [
+                      chartMode.startsWith('media') ? value.toFixed(1) : value,
+                      chartMode.endsWith('Points') ? 'Pontos' : 'Artes'
+                    ]}
+                  />
+                }
+                cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}
               />
               <Bar 
                 dataKey={getChartDataKey()} 
                 radius={[6, 6, 0, 0]}
                 maxBarSize={80}
+                style={{ transition: 'opacity 150ms ease' }}
               >
                 {chartData.map((entry, index) => (
                   <Cell key={`cell-${index}`} fill={entry.color} />
@@ -409,7 +495,7 @@ export const AdminDashboard: React.FC = () => {
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <div className="h-[350px] flex items-center justify-center text-slate-500">
+          <div className="h-[350px] flex items-center justify-center text-slate-500 dark:text-slate-400">
             Sem dados para o periodo selecionado
           </div>
         )}
@@ -439,20 +525,12 @@ export const AdminDashboard: React.FC = () => {
                     ))}
                   </Pie>
                   <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: '#1e293b',
-                      border: 'none',
-                      borderRadius: '8px',
-                      color: '#fff'
-                    }}
-                    itemStyle={{
-                      color: '#fff'
-                    }}
-                    labelStyle={{
-                      color: '#fff',
-                      fontWeight: 'bold'
-                    }}
-                    formatter={(value: number) => [`${value} pts`, 'Pontos']}
+                    content={
+                      <CustomTooltip 
+                        isDark={isDark} 
+                        formatter={(value) => [`${value} pts`, 'Pontos']}
+                      />
+                    }
                   />
                 </PieChart>
               </ResponsiveContainer>

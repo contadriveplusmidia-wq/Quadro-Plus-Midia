@@ -11,7 +11,9 @@ import {
   Menu,
   X,
   Sun,
-  Moon
+  Moon,
+  Trophy,
+  Link2
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -39,6 +41,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/designer', icon: LayoutDashboard, label: 'Dashboard', badge: 0 },
     { to: '/designer/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: unviewedFeedbackCount },
     { to: '/designer/lessons', icon: GraduationCap, label: 'Aulas', badge: 0 },
+    { to: '/designer/premiacoes', icon: Trophy, label: 'Premiações', badge: 0 },
+    { to: '/designer/links', icon: Link2, label: 'Links Úteis', badge: 0 },
   ];
 
   const adminLinks = [
@@ -46,6 +50,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     { to: '/admin/history', icon: History, label: 'Histórico', badge: 0 },
     { to: '/admin/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: 0 },
     { to: '/admin/lessons', icon: GraduationCap, label: 'Aulas', badge: 0 },
+    { to: '/admin/premiacoes', icon: Trophy, label: 'Premiações', badge: 0 },
+    { to: '/admin/links', icon: Link2, label: 'Links Úteis', badge: 0 },
     { to: '/admin/settings', icon: Settings, label: 'Configurações', badge: 0 },
   ];
 

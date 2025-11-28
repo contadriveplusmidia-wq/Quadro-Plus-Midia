@@ -1,7 +1,60 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Minus, Clock, Zap, TrendingUp, Trash2, ClipboardList } from 'lucide-react';
-import { DemandItem } from '../types';
+import { Plus, Minus, Clock, Zap, TrendingUp, Trash2, ClipboardList, Target, CheckCircle, AlertTriangle } from 'lucide-react';
+import { DemandItem, DailyPerformanceResult, PerformanceStatus } from '../types';
+
+// Função centralizada para calcular status de performance diária
+const getDailyPerformanceStatus = (artsToday: number, dailyGoal: number): DailyPerformanceResult => {
+  const goal = dailyGoal || 10;
+  const percentage = Math.round((artsToday / goal) * 100);
+  
+  let status: PerformanceStatus;
+  let message: string;
+  let colors: DailyPerformanceResult['colors'];
+  
+  if (percentage >= 100) {
+    status = 'success';
+    message = 'Meta alcançada! Excelente trabalho!';
+    colors = {
+      bg: 'bg-green-500',
+      bgDark: 'bg-green-500/20',
+      border: 'border-green-500',
+      borderDark: 'border-green-500/50',
+      text: 'text-white',
+      textDark: 'text-green-400',
+      accent: 'text-green-200',
+      accentDark: 'text-green-300'
+    };
+  } else if (percentage >= 70) {
+    status = 'warning';
+    message = 'Você está quase lá, continue!';
+    colors = {
+      bg: 'bg-yellow-400',
+      bgDark: 'bg-yellow-400/20',
+      border: 'border-yellow-400',
+      borderDark: 'border-yellow-400/50',
+      text: 'text-yellow-900',
+      textDark: 'text-yellow-400',
+      accent: 'text-yellow-700',
+      accentDark: 'text-yellow-300'
+    };
+  } else {
+    status = 'neutral';
+    message = 'Continue produzindo!';
+    colors = {
+      bg: 'bg-indigo-600',
+      bgDark: 'bg-indigo-600/20',
+      border: 'border-indigo-600',
+      borderDark: 'border-indigo-500/50',
+      text: 'text-white',
+      textDark: 'text-indigo-400',
+      accent: 'text-indigo-200',
+      accentDark: 'text-indigo-300'
+    };
+  }
+  
+  return { status, percentage, message, colors };
+};
 
 export const DesignerDashboard: React.FC = () => {
   const { currentUser, artTypes, demands, addDemand, deleteDemand, startWorkSession, getTodaySession, settings } = useApp();
@@ -29,6 +82,25 @@ export const DesignerDashboard: React.FC = () => {
 
   const totalArtsToday = todayDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
   const totalPointsToday = todayDemands.reduce((acc, d) => acc + d.totalPoints, 0);
+
+  // Calcular status de performance
+  const dailyGoal = settings.dailyGoal || 10;
+  const performanceStatus = useMemo(() => 
+    getDailyPerformanceStatus(totalArtsToday, dailyGoal), 
+    [totalArtsToday, dailyGoal]
+  );
+
+  // Detectar tema dark/light
+  const [isDark, setIsDark] = useState(false);
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(document.documentElement.classList.contains('dark'));
+    };
+    checkTheme();
+    const observer = new MutationObserver(checkTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, []);
 
   const selectedArt = artTypes.find(a => a.id === selectedArtType);
   const variationPoints = variationQty * (settings.variationPoints || 5);
@@ -123,37 +195,76 @@ export const DesignerDashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-indigo-600 to-indigo-700 rounded-2xl p-6 text-white relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10"></div>
-          <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full -ml-8 -mb-8"></div>
+        {/* Card dinâmico de Performance do Dia */}
+        <div className={`rounded-2xl p-6 relative overflow-hidden transition-all duration-300 ${
+          isDark 
+            ? `${performanceStatus.colors.bgDark} border ${performanceStatus.colors.borderDark}` 
+            : `bg-gradient-to-br ${
+                performanceStatus.status === 'success' ? 'from-green-500 to-green-600' :
+                performanceStatus.status === 'warning' ? 'from-yellow-400 to-yellow-500' :
+                'from-indigo-600 to-indigo-700'
+              }`
+        }`}>
+          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-10 -mt-10 ${
+            isDark ? 'bg-white/5' : 'bg-white/10'
+          }`}></div>
+          <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full -ml-8 -mb-8 ${
+            isDark ? 'bg-white/3' : 'bg-white/5'
+          }`}></div>
           
           <div className="relative">
-            <div className="flex items-center gap-2 text-indigo-200 text-sm mb-4">
-              <Zap size={16} />
+            <div className={`flex items-center gap-2 text-sm mb-4 ${
+              isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+            }`}>
+              {performanceStatus.status === 'success' ? <CheckCircle size={16} /> :
+               performanceStatus.status === 'warning' ? <AlertTriangle size={16} /> :
+               <Zap size={16} />}
               <span className="uppercase tracking-wider font-medium">Performance do Dia</span>
             </div>
             
-            <div className="text-6xl font-bold mb-2">{totalPointsToday}</div>
-            <div className="text-indigo-200 mb-6">Pontos totais</div>
+            <div className={`text-6xl font-bold mb-2 ${
+              isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
+            }`}>{totalPointsToday}</div>
+            <div className={`mb-6 ${
+              isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+            }`}>Pontos totais</div>
             
             <div className="flex gap-8">
               <div>
-                <div className="text-3xl font-bold">{totalArtsToday}</div>
-                <div className="text-indigo-200 text-sm uppercase">Artes</div>
+                <div className={`text-3xl font-bold ${
+                  isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
+                }`}>{totalArtsToday}</div>
+                <div className={`text-sm uppercase ${
+                  isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+                }`}>Artes</div>
               </div>
               <div>
-                <div className="text-3xl font-bold">{todayDemands.length}</div>
-                <div className="text-indigo-200 text-sm uppercase">Demandas</div>
+                <div className={`text-3xl font-bold ${
+                  isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
+                }`}>{todayDemands.length}</div>
+                <div className={`text-sm uppercase ${
+                  isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+                }`}>Demandas</div>
               </div>
             </div>
             
-            <div className="mt-6 flex items-center gap-3 bg-white/10 rounded-xl p-3">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <TrendingUp size={20} />
+            <div className={`mt-6 flex items-center gap-3 rounded-xl p-3 ${
+              isDark ? 'bg-white/10' : 'bg-white/20'
+            }`}>
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                isDark ? 'bg-white/10' : 'bg-white/30'
+              }`}>
+                <Target size={20} className={isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text} />
               </div>
               <div>
-                <div className="font-semibold">Meta Diaria</div>
-                <div className="text-indigo-200 text-sm">Continue produzindo!</div>
+                <div className={`font-semibold ${
+                  isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
+                }`}>
+                  Meta: {totalArtsToday}/{dailyGoal} artes ({performanceStatus.percentage}%)
+                </div>
+                <div className={`text-sm ${
+                  isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+                }`}>{performanceStatus.message}</div>
               </div>
             </div>
           </div>
