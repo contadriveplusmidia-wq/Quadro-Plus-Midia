@@ -215,22 +215,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
     const newDemand = await res.json();
     setDemands(prev => [newDemand, ...prev]);
-    
-    // Se a demanda for do mês atual, recarregar settings para atualizar a flag de notificações
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
-    if (newDemand.timestamp >= currentMonthStart && newDemand.timestamp <= currentMonthEnd) {
-      try {
-        const settingsRes = await fetch(`${API_URL}/api/settings`);
-        if (settingsRes.ok) {
-          const updatedSettings = await settingsRes.json();
-          setSettings(updatedSettings);
-        }
-      } catch (settingsError) {
-        console.error('Erro ao recarregar settings:', settingsError);
-      }
-    }
   };
 
   const deleteDemand = async (id: string) => {

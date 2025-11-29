@@ -39,6 +39,7 @@ export const AdminSettings: React.FC = () => {
   const [editingArt, setEditingArt] = useState<any>(null);
   const [artLabel, setArtLabel] = useState('');
   const [artPoints, setArtPoints] = useState(10);
+  const [draggedItem, setDraggedItem] = useState<string | null>(null);
 
   const designers = users.filter(u => u.role === 'DESIGNER');
 
@@ -91,8 +92,36 @@ export const AdminSettings: React.FC = () => {
   };
 
   const handleDeleteUser = async (id: string) => {
-    if (confirm('Tem certeza que deseja desativar este designer?')) {
-      await deleteUser(id);
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    
+    if (user.active) {
+      // Se está ativo, apenas desativa
+      if (confirm('Tem certeza que deseja desativar este designer?')) {
+        await deleteUser(id);
+      }
+    } else {
+      // Se está inativo, deleta permanentemente
+      if (confirm('Tem certeza que deseja deletar permanentemente este usuário? Esta ação não pode ser desfeita.')) {
+        await deleteUserPermanently(id);
+      }
+    }
+  };
+
+  const deleteUserPermanently = async (id: string) => {
+    try {
+      const res = await fetch('/api/users/' + id, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        // Recarregar a lista de usuários
+        window.location.reload();
+      } else {
+        alert('Erro ao deletar usuário');
+      }
+    } catch (error) {
+      console.error('Erro ao deletar usuário:', error);
+      alert('Erro ao deletar usuário');
     }
   };
 
@@ -133,6 +162,53 @@ export const AdminSettings: React.FC = () => {
     setEditingArt(null);
     setArtLabel('');
     setArtPoints(10);
+  };
+
+  const handleDragStart = (e: React.DragEvent, artId: string) => {
+    setDraggedItem(artId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', artId);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetArtId: string) => {
+    e.preventDefault();
+    
+    if (!draggedItem || draggedItem === targetArtId) {
+      setDraggedItem(null);
+      return;
+    }
+
+    const sortedArtTypes = [...artTypes].sort((a, b) => a.order - b.order);
+    const draggedIndex = sortedArtTypes.findIndex(a => a.id === draggedItem);
+    const targetIndex = sortedArtTypes.findIndex(a => a.id === targetArtId);
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      setDraggedItem(null);
+      return;
+    }
+
+    // Reordenar o array
+    const [removed] = sortedArtTypes.splice(draggedIndex, 1);
+    sortedArtTypes.splice(targetIndex, 0, removed);
+
+    // Atualizar a ordem
+    const reorderedArtTypes = sortedArtTypes.map((art, index) => ({
+      ...art,
+      order: index
+    }));
+
+    // Salvar no banco
+    await reorderArtTypes(reorderedArtTypes);
+    setDraggedItem(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
   };
 
   const handleChangePassword = async () => {
@@ -319,20 +395,21 @@ export const AdminSettings: React.FC = () => {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleEditUser(user)}
-                    className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
-                  >
-                    <Edit2 size={18} />
-                  </button>
                   {user.active && (
                     <button
-                      onClick={() => handleDeleteUser(user.id)}
-                      className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                      onClick={() => handleEditUser(user)}
+                      className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
                     >
-                      <Trash2 size={18} />
+                      <Edit2 size={18} />
                     </button>
                   )}
+                  <button
+                    onClick={() => handleDeleteUser(user.id)}
+                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                    title={user.active ? 'Desativar' : 'Deletar permanentemente'}
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
             ))}
@@ -354,9 +431,21 @@ export const AdminSettings: React.FC = () => {
 
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800">
             {artTypes.sort((a, b) => a.order - b.order).map(art => (
-              <div key={art.id} className="p-4 flex items-center justify-between">
+              <div
+                key={art.id}
+                draggable
+                onDragStart={(e) => handleDragStart(e, art.id)}
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, art.id)}
+                onDragEnd={handleDragEnd}
+                className={`p-4 flex items-center justify-between transition-all duration-200 ${
+                  draggedItem === art.id 
+                    ? 'opacity-50 bg-slate-100 dark:bg-slate-800' 
+                    : 'hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-move'
+                }`}
+              >
                 <div className="flex items-center gap-3">
-                  <GripVertical className="text-slate-300 cursor-grab" size={20} />
+                  <GripVertical className="text-slate-300 dark:text-slate-600 cursor-grab active:cursor-grabbing" size={20} />
                   <div>
                     <p className="font-medium text-slate-900 dark:text-white">{art.label}</p>
                     <p className="text-sm text-brand-600 font-semibold">{art.points} pontos</p>

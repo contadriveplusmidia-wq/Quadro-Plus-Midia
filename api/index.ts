@@ -419,18 +419,6 @@ app.post('/api/demands', async (req: Request, res: Response) => {
     }
     await client.query('COMMIT');
     
-    // Se a demanda for do mês atual, ativar flag de atualizações de premiações
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
-    if (timestamp >= currentMonthStart && timestamp <= currentMonthEnd) {
-      try {
-        await pool.query('UPDATE system_settings SET awards_has_updates = true WHERE id = 1');
-      } catch (updateError) {
-        console.error('Erro ao atualizar flag de atualizações:', updateError);
-      }
-    }
-    
     return res.json({ id, userId, userName, items, totalQuantity, totalPoints, timestamp });
   } catch (error) {
     await client.query('ROLLBACK');
