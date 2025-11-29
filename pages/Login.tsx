@@ -98,16 +98,8 @@ export const Login: React.FC = () => {
       <div className="w-full max-w-md">
         <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 md:p-10 border border-slate-200 dark:border-slate-800">
           <div className="text-center mb-10">
-            {settings.logoUrl ? (
+            {settings.logoUrl && (
               <img src={settings.logoUrl} alt={settings.brandTitle || 'Logo'} className="h-24 mx-auto mb-5 object-contain" />
-            ) : (
-              <div className="flex justify-center mb-5">
-                <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M40 10L60 70H50L40 35L30 70H20L40 10Z" stroke="#1e293b" strokeWidth="3" fill="none"/>
-                  <path d="M25 55H55" stroke="#4F46E5" strokeWidth="3"/>
-                  <circle cx="40" cy="15" r="3" fill="#4F46E5"/>
-                </svg>
-              </div>
             )}
             <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mb-2">
               {settings.brandTitle || 'DesignFlow Pro'}
