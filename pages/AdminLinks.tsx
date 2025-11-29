@@ -388,6 +388,52 @@ export const AdminLinks: React.FC = () => {
                   </button>
                 )}
               </div>
+              
+              {/* Seletor de Tags */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                  Tags
+                </label>
+                <div className="flex flex-wrap gap-2 p-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg min-h-[60px]">
+                  {selectedTagIds.length === 0 ? (
+                    <span className="text-sm text-slate-400 dark:text-slate-500">Nenhuma tag selecionada</span>
+                  ) : (
+                    selectedTagIds.map(tagId => {
+                      const tag = tags.find(t => t.id === tagId);
+                      return tag ? (
+                        <TagComponent
+                          key={tag.id}
+                          tag={tag}
+                          onRemove={() => toggleTagSelection(tag.id)}
+                        />
+                      ) : null;
+                    })
+                  )}
+                </div>
+                {tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {tags
+                      .filter(tag => !selectedTagIds.includes(tag.id))
+                      .map(tag => (
+                        <button
+                          key={tag.id}
+                          type="button"
+                          onClick={() => toggleTagSelection(tag.id)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-sm font-medium bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors border border-slate-300 dark:border-slate-600"
+                        >
+                          <TagIcon size={14} />
+                          <span>{tag.name}</span>
+                          <Plus size={12} />
+                        </button>
+                      ))}
+                  </div>
+                )}
+                {tags.length === 0 && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+                    Nenhuma tag criada. Use "Gerenciar Tags" para criar.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="p-6 border-t border-slate-200 dark:border-slate-800">
