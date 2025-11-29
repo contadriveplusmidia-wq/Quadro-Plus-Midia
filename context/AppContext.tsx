@@ -36,6 +36,7 @@ interface AppContextType {
   updateLesson: (id: string, lesson: Partial<Lesson>) => Promise<void>;
   deleteLesson: (id: string) => Promise<void>;
   markLessonViewed: (lessonId: string, designerId: string) => Promise<void>;
+  unmarkLessonViewed: (lessonId: string, designerId: string) => Promise<void>;
   addAward: (award: Omit<Award, 'id' | 'createdAt'>) => Promise<{ success: boolean; error?: string }>;
   deleteAward: (id: string) => Promise<void>;
   addUsefulLink: (link: Omit<UsefulLink, 'id' | 'createdAt'>) => Promise<boolean>;
@@ -300,6 +301,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
       return [...prev, progress];
     });
+  };
+
+  const unmarkLessonViewed = async (lessonId: string, designerId: string) => {
+    await fetch(`${API_URL}/api/lesson-progress/${lessonId}/${designerId}`, {
+      method: 'DELETE'
+    });
+    setLessonProgress(prev => prev.filter(p => !(p.lessonId === lessonId && p.designerId === designerId)));
   };
 
   const addAward = async (award: Omit<Award, 'id' | 'createdAt'>): Promise<{ success: boolean; error?: string }> => {
@@ -568,6 +576,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updateLesson,
       deleteLesson,
       markLessonViewed,
+      unmarkLessonViewed,
       addAward,
       deleteAward,
       addUsefulLink,

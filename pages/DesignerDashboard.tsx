@@ -42,14 +42,14 @@ const getDailyPerformanceStatus = (artsToday: number, dailyGoal: number): DailyP
     status = 'neutral';
     message = 'Continue produzindo!';
     colors = {
-      bg: 'bg-indigo-600',
-      bgDark: 'bg-indigo-600/20',
-      border: 'border-indigo-600',
-      borderDark: 'border-indigo-500/50',
+      bg: 'bg-[#280FFF]',
+      bgDark: 'bg-[#280FFF]/10',
+      border: 'border-[#280FFF]',
+      borderDark: 'border-[#280FFF]/30',
       text: 'text-white',
-      textDark: 'text-indigo-400',
-      accent: 'text-indigo-200',
-      accentDark: 'text-indigo-300'
+      textDark: 'text-white',
+      accent: 'text-white/90',
+      accentDark: 'text-slate-300'
     };
   }
   
@@ -202,7 +202,7 @@ export const DesignerDashboard: React.FC = () => {
             : `bg-gradient-to-br ${
                 performanceStatus.status === 'success' ? 'from-green-500 to-green-600' :
                 performanceStatus.status === 'warning' ? 'from-yellow-400 to-yellow-500' :
-                'from-indigo-600 to-indigo-700'
+                'from-[#280FFF] to-[#1F0BFF]'
               }`
         }`}>
           <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-10 -mt-10 ${

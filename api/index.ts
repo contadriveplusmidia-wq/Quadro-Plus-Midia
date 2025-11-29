@@ -605,6 +605,19 @@ app.post('/api/lesson-progress', async (req: Request, res: Response) => {
   }
 });
 
+app.delete('/api/lesson-progress/:lessonId/:designerId', async (req: Request, res: Response) => {
+  try {
+    const { lessonId, designerId } = req.params;
+    await pool.query(
+      'DELETE FROM lesson_progress WHERE lesson_id = $1 AND designer_id = $2',
+      [lessonId, designerId]
+    );
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao remover progresso' });
+  }
+});
+
 // ============ SETTINGS ============
 app.get('/api/settings', async (req: Request, res: Response) => {
   try {

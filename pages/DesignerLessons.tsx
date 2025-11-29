@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { GraduationCap, Play, CheckCircle, Circle, X } from 'lucide-react';
 
 export const DesignerLessons: React.FC = () => {
-  const { currentUser, lessons, lessonProgress, markLessonViewed } = useApp();
+  const { currentUser, lessons, lessonProgress, markLessonViewed, unmarkLessonViewed } = useApp();
   const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
 
   const isLessonViewed = (lessonId: string) => {
@@ -17,6 +17,13 @@ export const DesignerLessons: React.FC = () => {
     setSelectedLesson(lessonId);
     if (currentUser && !isLessonViewed(lessonId)) {
       await markLessonViewed(lessonId, currentUser.id);
+    }
+  };
+
+  const handleUnmark = async (lessonId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (currentUser) {
+      await unmarkLessonViewed(lessonId, currentUser.id);
     }
   };
 
@@ -119,13 +126,23 @@ export const DesignerLessons: React.FC = () => {
 
                   <div className="flex-1 p-6">
                     <div className="flex items-start gap-4">
-                      <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center ${
-                        viewed 
-                          ? 'bg-green-100 dark:bg-green-900/30 text-green-600' 
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                      }`}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (viewed && currentUser) {
+                            handleUnmark(lesson.id, e);
+                          }
+                        }}
+                        className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200 ${
+                          viewed 
+                            ? 'bg-green-100 dark:bg-green-900/30 text-green-600 hover:bg-green-200 dark:hover:bg-green-900/50 cursor-pointer' 
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 cursor-default'
+                        }`}
+                        disabled={!viewed}
+                        title={viewed ? 'Clique para desmarcar como assistida' : ''}
+                      >
                         {viewed ? <CheckCircle size={24} /> : <Circle size={24} />}
-                      </div>
+                      </button>
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
                           <span className="text-sm text-slate-400">Aula {idx + 1}</span>
