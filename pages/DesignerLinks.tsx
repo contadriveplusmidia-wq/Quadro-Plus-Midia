@@ -6,7 +6,7 @@ import { Tag as TagComponent } from '../components/Tag';
 export const DesignerLinks: React.FC = () => {
   const { usefulLinks, tags } = useApp();
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [selectedTagIds, setSelectedTagIds] = React.useState<string[]>([]);
+  const [selectedTagId, setSelectedTagId] = React.useState<string | null>(null);
 
   const filteredLinks = usefulLinks.filter(link => {
     // Filtro por busca (título, URL ou tags)
@@ -17,20 +17,16 @@ export const DesignerLinks: React.FC = () => {
         tag.name.toLowerCase().includes(searchTerm.toLowerCase())
       ));
     
-    // Filtro por tags (deve conter TODAS as tags selecionadas)
-    const matchesTags = selectedTagIds.length === 0 || 
-      (link.tags && selectedTagIds.every(tagId => 
-        link.tags!.some(tag => tag.id === tagId)
-      ));
+    // Filtro por tag (apenas uma tag selecionada)
+    const matchesTag = !selectedTagId || 
+      (link.tags && link.tags.some(tag => tag.id === selectedTagId));
     
-    return matchesSearch && matchesTags;
+    return matchesSearch && matchesTag;
   });
   
   const toggleTagFilter = (tagId: string) => {
-    setSelectedTagIds(prev => 
-      prev.includes(tagId) 
-        ? prev.filter(id => id !== tagId)
-        : [...prev, tagId]
+    setSelectedTagId(prev => 
+      prev === tagId ? null : tagId
     );
   };
 
@@ -83,7 +79,7 @@ export const DesignerLinks: React.FC = () => {
           </div>
           <div className="flex flex-wrap gap-2">
             {tags.map(tag => {
-              const isSelected = selectedTagIds.includes(tag.id);
+              const isSelected = selectedTagId === tag.id;
               return (
                 <TagComponent
                   key={tag.id}
@@ -93,30 +89,17 @@ export const DesignerLinks: React.FC = () => {
                 />
               );
             })}
-            {selectedTagIds.length > 0 && (
+            {selectedTagId && (
               <button
-                onClick={() => setSelectedTagIds([])}
+                onClick={() => setSelectedTagId(null)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-2xl text-sm font-medium bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
               >
-                Limpar filtros
+                Limpar filtro
               </button>
             )}
           </div>
         </div>
       )}
-
-      {/* Estatística */}
-      <div className="bg-gradient-to-br from-indigo-50 to-blue-100 dark:from-indigo-900/20 dark:to-blue-800/20 rounded-2xl p-5 border border-indigo-200 dark:border-indigo-800">
-        <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-200 dark:bg-indigo-800 rounded-xl">
-            <Globe className="text-indigo-600 dark:text-indigo-400" size={24} />
-          </div>
-          <div>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white">{usefulLinks.length}</p>
-            <p className="text-sm text-indigo-600 dark:text-indigo-400">Links disponíveis</p>
-          </div>
-        </div>
-      </div>
 
       {/* Lista de links */}
       {usefulLinks.length === 0 ? (

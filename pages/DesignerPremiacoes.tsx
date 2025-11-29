@@ -207,7 +207,7 @@ export const DesignerPremiacoes: React.FC = () => {
                 Parabéns!
               </p>
               <p className="text-xs text-slate-600 dark:text-slate-400 font-normal">
-                Você é um vencedor
+                você é um dos nossos melhores Designers
               </p>
             </div>
             <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
