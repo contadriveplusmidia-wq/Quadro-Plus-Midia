@@ -204,7 +204,7 @@ export const AdminLinks: React.FC = () => {
           </button>
           <button
             onClick={openNewModal}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#280FFF] hover:bg-[#280FFF]/90 text-white dark:text-white rounded-lg transition-colors"
           >
             <Plus size={20} />
             <span>Novo Link</span>
@@ -213,14 +213,14 @@ export const AdminLinks: React.FC = () => {
       </div>
 
       {/* Estatísticas */}
-      <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 dark:from-indigo-900/20 dark:to-indigo-800/20 rounded-2xl p-5 border border-indigo-200 dark:border-indigo-800">
+      <div className="bg-gradient-to-br from-[#280FFF]/10 to-[#280FFF]/5 dark:from-slate-800 dark:to-slate-800/80 rounded-2xl p-5 border border-[#280FFF]/20 dark:border-slate-700">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-indigo-200 dark:bg-indigo-800 rounded-xl">
-            <Globe className="text-indigo-600 dark:text-indigo-400" size={24} />
+          <div className="p-3 bg-[#280FFF]/15 dark:bg-slate-700 rounded-xl">
+            <Globe className="text-[#280FFF] dark:text-slate-300" size={24} />
           </div>
           <div>
             <p className="text-2xl font-bold text-slate-900 dark:text-white">{usefulLinks.length}</p>
-            <p className="text-sm text-indigo-600 dark:text-indigo-400">Links cadastrados</p>
+            <p className="text-sm text-[#280FFF] dark:text-slate-300">Links cadastrados</p>
           </div>
         </div>
       </div>
@@ -253,7 +253,7 @@ export const AdminLinks: React.FC = () => {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                 </div>
               ) : (
-                <div className="h-36 bg-gradient-to-br from-indigo-400 to-indigo-600 flex items-center justify-center">
+                <div className="h-36 bg-gradient-to-br from-[#280FFF] to-[#280FFF]/80 flex items-center justify-center">
                   <Globe className="text-white/30" size={64} />
                 </div>
               )}
@@ -288,7 +288,7 @@ export const AdminLinks: React.FC = () => {
                   </a>
                   <button
                     onClick={() => handleEdit(link)}
-                    className="p-2 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                    className="p-2 text-slate-400 hover:text-[#280FFF] dark:hover:text-slate-300 hover:bg-[#280FFF]/10 dark:hover:bg-slate-700 rounded-lg transition-colors"
                   >
                     <Edit2 size={18} />
                   </button>
@@ -311,8 +311,8 @@ export const AdminLinks: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                  <Link2 className="text-indigo-600 dark:text-indigo-400" size={24} />
+                <div className="p-2 bg-[#280FFF]/10 dark:bg-slate-700 rounded-lg">
+                  <Link2 className="text-[#280FFF] dark:text-slate-300" size={24} />
                 </div>
                 <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                   {editingLink ? 'Editar Link' : 'Novo Link'}
@@ -440,7 +440,7 @@ export const AdminLinks: React.FC = () => {
               <button
                 onClick={handleSubmit}
                 disabled={!title.trim() || !url.trim() || saving}
-                className="w-full py-3 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 bg-[#280FFF] hover:bg-[#280FFF]/90 text-white dark:text-white font-semibold rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
               >
                 <Link2 size={20} />
                 {saving ? 'Salvando...' : (editingLink ? 'Atualizar Link' : 'Adicionar Link')}
@@ -456,8 +456,8 @@ export const AdminLinks: React.FC = () => {
           <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-indigo-100 dark:bg-indigo-900/30 rounded-lg">
-                  <TagIcon className="text-indigo-600 dark:text-indigo-400" size={24} />
+                <div className="p-2 bg-[#280FFF]/10 dark:bg-slate-700 rounded-lg">
+                  <TagIcon className="text-[#280FFF] dark:text-slate-300" size={24} />
                 </div>
                 <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                   Gerenciar Tags
@@ -497,7 +497,7 @@ export const AdminLinks: React.FC = () => {
                   />
                   <button
                     onClick={handleTagSubmit}
-                    className="px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors"
+                    className="px-4 py-2 bg-[#280FFF] hover:bg-[#280FFF]/90 text-white dark:text-white rounded-lg transition-colors"
                   >
                     {editingTag ? 'Atualizar' : 'Criar'}
                   </button>
@@ -526,7 +526,7 @@ export const AdminLinks: React.FC = () => {
                         <TagComponent tag={tag} />
                         <button
                           onClick={() => handleTagEdit(tag)}
-                          className="p-1 text-slate-400 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded transition-colors"
+                          className="p-1 text-slate-400 hover:text-[#280FFF] dark:hover:text-slate-300 hover:bg-[#280FFF]/10 dark:hover:bg-slate-700 rounded transition-colors"
                         >
                           <Edit2 size={14} />
                         </button>

@@ -128,7 +128,7 @@ export const DesignerLinks: React.FC = () => {
             <div
               key={link.id}
               onClick={() => handleOpenLink(link.url)}
-              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden cursor-pointer group hover:shadow-xl hover:border-indigo-300 dark:hover:border-indigo-700 hover:-translate-y-1 transition-all duration-300"
+              className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden cursor-pointer group hover:shadow-xl hover:border-[#280FFF]/30 dark:hover:border-slate-600 hover:-translate-y-1 transition-all duration-300"
             >
               {link.imageUrl ? (
                 <div className="h-40 bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
@@ -139,11 +139,11 @@ export const DesignerLinks: React.FC = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="absolute bottom-3 right-3 p-2 bg-white/90 dark:bg-slate-900/90 rounded-full opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
-                    <ExternalLink className="text-indigo-600 dark:text-indigo-400" size={18} />
+                    <ExternalLink className="text-[#280FFF] dark:text-slate-300" size={18} />
                   </div>
                 </div>
               ) : (
-                <div className="h-40 bg-gradient-to-br from-indigo-400 via-indigo-500 to-blue-600 flex items-center justify-center relative overflow-hidden">
+                <div className="h-40 bg-gradient-to-br from-[#280FFF] via-[#280FFF]/90 to-[#280FFF]/80 flex items-center justify-center relative overflow-hidden">
                   <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(255,255,255,0.2),transparent_50%)]" />
                   <Globe className="text-white/30 group-hover:scale-110 transition-transform duration-500" size={80} />
                   <div className="absolute bottom-3 right-3 p-2 bg-white/20 backdrop-blur-sm rounded-full opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0 transition-all duration-300">
@@ -153,7 +153,7 @@ export const DesignerLinks: React.FC = () => {
               )}
 
               <div className="p-4">
-                <h3 className="font-semibold text-slate-900 dark:text-white mb-1 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                <h3 className="font-semibold text-slate-900 dark:text-white mb-1 truncate group-hover:text-[#280FFF] dark:group-hover:text-slate-300 transition-colors">
                   {link.title}
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 flex items-center gap-1.5 truncate mb-2">

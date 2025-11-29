@@ -64,7 +64,7 @@ export const DesignerLessons: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
         <div className="flex items-center justify-between mb-4">
           <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Progresso</span>
-          <span className="text-sm font-bold text-brand-600">{progress}%</span>
+          <span className="text-sm font-bold text-brand-600 dark:text-white">{progress}%</span>
         </div>
         <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
           <div 
@@ -114,7 +114,7 @@ export const DesignerLessons: React.FC = () => {
                     )}
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                       <div className="w-14 h-14 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Play size={24} className="text-brand-600 ml-1" />
+                        <Play size={24} className="text-brand-600 dark:text-white ml-1" />
                       </div>
                     </div>
                     {viewed && (

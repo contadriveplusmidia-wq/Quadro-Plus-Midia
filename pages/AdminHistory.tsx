@@ -303,7 +303,7 @@ export const AdminHistory: React.FC = () => {
                 Total de artes no período:
               </span>
             </div>
-            <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">
+            <span className="text-2xl font-bold text-brand-600 dark:text-white">
               {totalArts}
             </span>
           </div>
@@ -344,7 +344,7 @@ export const AdminHistory: React.FC = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right text-slate-900 dark:text-white font-semibold">{row.totalArts}</td>
-                      <td className="px-6 py-4 text-right text-brand-600 font-bold">{row.totalPoints}</td>
+                      <td className="px-6 py-4 text-right text-brand-600 dark:text-white font-bold">{row.totalPoints}</td>
                     </tr>
                   ))
                 )}
@@ -380,7 +380,7 @@ export const AdminHistory: React.FC = () => {
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-bold text-brand-600">{demand.totalPoints} pts</p>
+                    <p className="font-bold text-brand-600 dark:text-white">{demand.totalPoints} pts</p>
                     <p className="text-sm text-slate-500 dark:text-slate-400">{demand.totalQuantity} artes</p>
                   </div>
                 </div>

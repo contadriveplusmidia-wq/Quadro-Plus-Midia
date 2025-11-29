@@ -328,7 +328,7 @@ export const AdminPremiacoes: React.FC = () => {
             <button
               onClick={handleSaveSettings}
               disabled={savingSettings}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-[#280FFF] hover:bg-[#280FFF]/90 text-white dark:text-white rounded-lg transition-colors disabled:opacity-50"
             >
               <Save size={18} />
               {savingSettings ? 'Salvando...' : 'Salvar Configurações'}

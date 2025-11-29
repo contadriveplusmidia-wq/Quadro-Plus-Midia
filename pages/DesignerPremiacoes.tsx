@@ -275,7 +275,7 @@ export const DesignerPremiacoes: React.FC = () => {
                 {settings.showAwardsChart && (
                   <div className="mt-6">
                     <div className="flex items-center gap-2 mb-3">
-                      <TrendingUp className="text-indigo-500" size={18} />
+                      <TrendingUp className="text-[#280FFF] dark:text-slate-300" size={18} />
                       <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
                         Pontos do Mês Atual
                       </h4>

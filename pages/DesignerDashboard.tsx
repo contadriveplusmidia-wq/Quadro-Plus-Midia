@@ -356,7 +356,7 @@ export const DesignerDashboard: React.FC = () => {
             <button
               onClick={handleAddItem}
               disabled={!selectedArtType}
-              className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-xl hover:border-brand-600 hover:text-brand-600 disabled:opacity-50 transition-all duration-200 hover:bg-brand-50 dark:hover:bg-brand-900/10"
+              className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-xl hover:border-brand-600 hover:text-brand-600 dark:hover:border-slate-400 dark:hover:text-slate-300 disabled:opacity-50 transition-all duration-200 hover:bg-brand-50 dark:hover:bg-brand-900/10"
             >
               <Plus size={18} />
               Adicionar Item

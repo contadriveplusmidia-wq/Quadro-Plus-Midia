@@ -346,7 +346,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({ demands, designers
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-            <BarChart3 className="text-brand-600 dark:text-brand-400" size={20} />
+            <BarChart3 className="text-brand-600 dark:text-slate-300" size={20} />
             Gráficos de Produtividade
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
@@ -602,7 +602,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({ demands, designers
                       </div>
                       <div>
                         <p className="text-slate-500 dark:text-slate-400">Pontos</p>
-                        <p className="font-bold text-brand-600">{designer.pontos}</p>
+                        <p className="font-bold text-brand-600 dark:text-white">{designer.pontos}</p>
                       </div>
                       <div>
                         <p className="text-slate-500 dark:text-slate-400">Demandas</p>

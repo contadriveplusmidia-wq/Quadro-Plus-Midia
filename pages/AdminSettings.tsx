@@ -276,7 +276,7 @@ export const AdminSettings: React.FC = () => {
             onClick={() => setActiveTab(tab.id as any)}
             className={`flex items-center gap-2 px-4 py-3 border-b-2 transition-colors ${
               activeTab === tab.id
-                ? 'border-brand-600 text-brand-600'
+                ? 'border-brand-600 text-brand-600 dark:border-slate-300 dark:text-white'
                 : 'border-transparent text-slate-500 hover:text-slate-700'
             }`}
           >
@@ -448,7 +448,7 @@ export const AdminSettings: React.FC = () => {
                   <GripVertical className="text-slate-300 dark:text-slate-600 cursor-grab active:cursor-grabbing" size={20} />
                   <div>
                     <p className="font-medium text-slate-900 dark:text-white">{art.label}</p>
-                    <p className="text-sm text-brand-600 font-semibold">{art.points} pontos</p>
+                    <p className="text-sm text-brand-600 dark:text-slate-300 font-semibold">{art.points} pontos</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">

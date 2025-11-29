@@ -121,7 +121,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   {link.badge > 0 && (
                     <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ${
                       isActive 
-                        ? 'bg-white text-brand-600' 
+                        ? 'bg-white text-brand-600 dark:bg-slate-800 dark:text-white' 
                         : 'bg-red-500 text-white'
                     }`}>
                       {link.badge}

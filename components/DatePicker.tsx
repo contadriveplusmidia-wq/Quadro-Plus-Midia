@@ -240,7 +240,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                       : selected
                       ? 'bg-brand-600 text-white shadow-md hover:bg-brand-700'
                       : today
-                      ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 hover:bg-brand-100 dark:hover:bg-brand-900/40'
+                      ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-slate-300 hover:bg-brand-100 dark:hover:bg-brand-900/40'
                       : currentMonthDay
                       ? isSunday
                         ? 'text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 opacity-60'
@@ -265,7 +265,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
             </button>
             <button
               onClick={handleToday}
-              className="flex-1 px-3 py-2 text-sm font-medium text-brand-600 dark:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
+              className="flex-1 px-3 py-2 text-sm font-medium text-brand-600 dark:text-slate-300 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-colors"
             >
               Hoje
             </button>

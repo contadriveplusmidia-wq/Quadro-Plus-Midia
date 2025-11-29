@@ -92,7 +92,7 @@ export const DesignerFeedbacks: React.FC = () => {
                     </p>
                   </div>
                   {!feedback.viewed && (
-                    <span className="px-3 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400 text-xs font-medium rounded-full">
+                    <span className="px-3 py-1 bg-brand-100 dark:bg-brand-900/30 text-brand-600 dark:text-slate-300 text-xs font-medium rounded-full">
                       Novo
                     </span>
                   )}

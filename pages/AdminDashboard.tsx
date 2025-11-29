@@ -269,7 +269,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
         <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2.5">
-            <Filter className="text-brand-600 dark:text-brand-400" size={20} />
+            <Filter className="text-brand-600 dark:text-slate-300" size={20} />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Visão Geral</h2>
           </div>
           <button
@@ -388,26 +388,14 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-5 border border-blue-200 dark:border-blue-800 shadow-sm">
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Pontos Totais</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalPoints}</p>
-              </div>
-              <div className="p-2 bg-blue-200 dark:bg-blue-800 rounded-lg">
-                <Award className="text-blue-600 dark:text-blue-400" size={22} />
-              </div>
-            </div>
-          </div>
-
           <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Artes Feitas</p>
+                <p className="text-xs font-semibold text-[#280FFF] dark:text-slate-300 uppercase tracking-wide">Artes Feitas</p>
                 <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalArts}</p>
               </div>
               <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                <Calendar className="text-slate-500 dark:text-slate-400" size={22} />
+                <Calendar className="text-[#280FFF] dark:text-slate-300" size={22} />
               </div>
             </div>
           </div>
@@ -433,6 +421,18 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
                 <Users className="text-amber-600 dark:text-amber-400" size={22} />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Pontos Totais</p>
+                <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalPoints}</p>
+              </div>
+              <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
+                <Award className="text-slate-500 dark:text-slate-400" size={22} />
               </div>
             </div>
           </div>
