@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Link2, Plus, X, Trash2, Edit2, Upload, ExternalLink, Globe, AlertCircle, Tag as TagIcon, Settings } from 'lucide-react';
 import { UsefulLink, Tag } from '../types';
 import { Tag as TagComponent } from '../components/Tag';
+import { autoFocus } from '../utils/autoFocus';
 
 export const AdminLinks: React.FC = () => {
   const { usefulLinks, addUsefulLink, updateUsefulLink, deleteUsefulLink, tags, addTag, updateTag, deleteTag } = useApp();
@@ -111,6 +112,22 @@ export const AdminLinks: React.FC = () => {
     setSelectedTagIds([]);
     setError('');
   };
+
+  const modalRef = useRef<HTMLDivElement>(null);
+  const tagsModalRef = useRef<HTMLDivElement>(null);
+
+  // AutoFocus quando modais abrirem
+  useEffect(() => {
+    if (showModal && modalRef.current) {
+      autoFocus(modalRef.current, 200);
+    }
+  }, [showModal]);
+
+  useEffect(() => {
+    if (showTagsModal && tagsModalRef.current) {
+      autoFocus(tagsModalRef.current, 200);
+    }
+  }, [showTagsModal]);
   
   // Funções para gerenciamento de tags
   const handleTagSubmit = async () => {
@@ -308,7 +325,7 @@ export const AdminLinks: React.FC = () => {
       {/* Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div ref={modalRef} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-[#280FFF]/10 dark:bg-slate-700 rounded-lg">
@@ -453,7 +470,7 @@ export const AdminLinks: React.FC = () => {
       {/* Modal de Gerenciamento de Tags */}
       {showTagsModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div ref={tagsModalRef} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-[#280FFF]/10 dark:bg-slate-700 rounded-lg">

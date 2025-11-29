@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Plus, X, Trash2, GraduationCap, Edit2, Play } from 'lucide-react';
+import { autoFocus } from '../utils/autoFocus';
 
 export const AdminLessons: React.FC = () => {
   const { lessons, users, lessonProgress, addLesson, updateLesson, deleteLesson } = useApp();
@@ -54,6 +55,15 @@ export const AdminLessons: React.FC = () => {
     setDescription('');
     setVideoUrl('');
   };
+
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // AutoFocus quando modal abrir
+  useEffect(() => {
+    if (showModal && modalRef.current) {
+      autoFocus(modalRef.current, 200);
+    }
+  }, [showModal]);
 
   const getYoutubeThumbnail = (url: string) => {
     const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s]+)/)?.[1];
@@ -183,7 +193,7 @@ export const AdminLessons: React.FC = () => {
 
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg">
+          <div ref={modalRef} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                 {editingId ? 'Editar Aula' : 'Nova Aula'}

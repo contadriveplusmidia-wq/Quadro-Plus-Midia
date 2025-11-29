@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Trophy, X, Trash2, Calendar, Upload, Crown, Star, AlertCircle, MessageSquare, Image, BarChart3, Save } from 'lucide-react';
+import { autoFocus } from '../utils/autoFocus';
 
 const MONTHS = [
   { value: 'Janeiro', label: 'Janeiro' },
@@ -54,6 +55,15 @@ export const AdminPremiacoes: React.FC = () => {
     setChartEnabled(settings.chartEnabled !== undefined ? settings.chartEnabled : true);
     setShowAwardsChart(settings.showAwardsChart || false);
   }, [settings]);
+
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  // AutoFocus quando modal abrir
+  useEffect(() => {
+    if (showModal && modalRef.current) {
+      autoFocus(modalRef.current, 200);
+    }
+  }, [showModal]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -463,7 +473,7 @@ export const AdminPremiacoes: React.FC = () => {
       {/* Modal de nova premiação */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div ref={modalRef} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">

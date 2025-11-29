@@ -502,11 +502,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   const updateSettings = async (newSettings: Partial<SystemSettings>) => {
-    await fetch(`${API_URL}/api/settings`, {
+    const res = await fetch(`${API_URL}/api/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newSettings)
     });
+    
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro desconhecido ao atualizar configurações' }));
+      throw new Error(error.error || 'Erro ao atualizar configurações');
+    }
+    
     // Recarregar settings do servidor para garantir sincronização (especialmente para awardsHasUpdates)
     try {
       const settingsRes = await fetch(`${API_URL}/api/settings`);

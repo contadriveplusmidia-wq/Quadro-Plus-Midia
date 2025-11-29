@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Settings, Users, Palette, Image, Save, Plus, X, Edit2, Trash2, GripVertical, Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import { autoFocus } from '../utils/autoFocus';
 
 const PRESET_COLORS = [
   '#4F46E5', '#8b5cf6', '#06b6d4', '#ec4899', '#f59e0b', '#10b981', 
@@ -27,7 +28,22 @@ export const AdminSettings: React.FC = () => {
   const [brandTitle, setBrandTitle] = useState(settings.brandTitle || '');
   const [loginSubtitle, setLoginSubtitle] = useState(settings.loginSubtitle || '');
   const [variationPoints, setVariationPoints] = useState(settings.variationPoints || 5);
+  const [dailyArtGoal, setDailyArtGoal] = useState(settings.dailyArtGoal || 8);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
+
+  // Sincronizar estados locais apenas na primeira carga
+  const [hasInitialized, setHasInitialized] = useState(false);
+  
+  useEffect(() => {
+    if (!hasInitialized && Object.keys(settings).length > 0) {
+      if (settings.brandTitle !== undefined) setBrandTitle(settings.brandTitle || '');
+      if (settings.loginSubtitle !== undefined) setLoginSubtitle(settings.loginSubtitle || '');
+      if (settings.variationPoints !== undefined) setVariationPoints(settings.variationPoints || 5);
+      if (settings.dailyArtGoal !== undefined) setDailyArtGoal(settings.dailyArtGoal || 8);
+      if (settings.logoUrl !== undefined) setLogoUrl(settings.logoUrl || '');
+      setHasInitialized(true);
+    }
+  }, [settings, hasInitialized]);
 
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
@@ -45,8 +61,35 @@ export const AdminSettings: React.FC = () => {
 
   const handleSaveBrand = async () => {
     setSaving(true);
-    await updateSettings({ brandTitle, loginSubtitle, variationPoints, logoUrl });
-    setSaving(false);
+    try {
+      const settingsToSave = { 
+        brandTitle, 
+        loginSubtitle, 
+        variationPoints: Number(variationPoints) || 5, 
+        dailyArtGoal: Number(dailyArtGoal) || 8,
+        logoUrl 
+      };
+      console.log('Salvando configurações:', settingsToSave);
+      console.log('Valores atuais dos estados:', { variationPoints, dailyArtGoal });
+      await updateSettings(settingsToSave);
+      // Aguardar um pouco para garantir que o servidor processou
+      await new Promise(resolve => setTimeout(resolve, 300));
+      // Recarregar settings para garantir sincronização
+      const settingsRes = await fetch('/api/settings');
+      if (settingsRes.ok) {
+        const updatedSettings = await settingsRes.json();
+        console.log('Settings recarregados do servidor:', updatedSettings);
+        // Atualizar estados locais com os valores salvos
+        if (updatedSettings.variationPoints !== undefined) setVariationPoints(updatedSettings.variationPoints);
+        if (updatedSettings.dailyArtGoal !== undefined) setDailyArtGoal(updatedSettings.dailyArtGoal);
+      }
+      alert('Configurações salvas com sucesso!');
+    } catch (error) {
+      console.error('Erro ao salvar configurações:', error);
+      alert('Erro ao salvar configurações. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -163,6 +206,22 @@ export const AdminSettings: React.FC = () => {
     setArtLabel('');
     setArtPoints(10);
   };
+
+  const userModalRef = useRef<HTMLDivElement>(null);
+  const artModalRef = useRef<HTMLDivElement>(null);
+
+  // AutoFocus quando modais abrirem
+  useEffect(() => {
+    if (showUserModal && userModalRef.current) {
+      autoFocus(userModalRef.current, 200);
+    }
+  }, [showUserModal]);
+
+  useEffect(() => {
+    if (showArtModal && artModalRef.current) {
+      autoFocus(artModalRef.current, 200);
+    }
+  }, [showArtModal]);
 
   const handleDragStart = (e: React.DragEvent, artId: string) => {
     setDraggedItem(artId);
@@ -343,19 +402,6 @@ export const AdminSettings: React.FC = () => {
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-              Pontos por Variação
-            </label>
-            <input
-              type="number"
-              min="1"
-              value={variationPoints}
-              onChange={(e) => setVariationPoints(parseInt(e.target.value) || 5)}
-              className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
-            />
-          </div>
-
           <button
             onClick={handleSaveBrand}
             disabled={saving}
@@ -418,7 +464,55 @@ export const AdminSettings: React.FC = () => {
       )}
 
       {activeTab === 'artTypes' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 space-y-4">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">Configurações Gerais</h3>
+            
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Pontos por Variação
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={variationPoints}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setVariationPoints(isNaN(val) ? 5 : val);
+                }}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                Meta de Artes por Dia
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={dailyArtGoal}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  setDailyArtGoal(isNaN(val) ? 8 : val);
+                }}
+                className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg"
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Número de artes que os designers devem produzir por dia
+              </p>
+            </div>
+
+            <button
+              onClick={handleSaveBrand}
+              disabled={saving}
+              className="flex items-center gap-2 px-6 py-3 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-lg disabled:opacity-50 transition-colors"
+            >
+              <Save size={20} />
+              {saving ? 'Salvando...' : 'Salvar Configurações'}
+            </button>
+          </div>
+
           <div className="flex justify-end">
             <button
               onClick={() => { resetArtForm(); setShowArtModal(true); }}
@@ -544,7 +638,7 @@ export const AdminSettings: React.FC = () => {
 
       {showUserModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md">
+          <div ref={userModalRef} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                 {editingUser ? 'Editar Designer' : 'Novo Designer'}
@@ -611,7 +705,7 @@ export const AdminSettings: React.FC = () => {
 
       {showArtModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md">
+          <div ref={artModalRef} className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-md">
             <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
               <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
                 {editingArt ? 'Editar Tipo de Arte' : 'Novo Tipo de Arte'}

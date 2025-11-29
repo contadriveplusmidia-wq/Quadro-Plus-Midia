@@ -631,6 +631,7 @@ app.get('/api/settings', async (req: Request, res: Response) => {
       brandTitle: s.brand_title,
       loginSubtitle: s.login_subtitle,
       variationPoints: s.variation_points,
+      dailyArtGoal: s.daily_art_goal !== null && s.daily_art_goal !== undefined ? s.daily_art_goal : 8,
       motivationalMessage: s.motivational_message || null,
       motivationalMessageEnabled: s.motivational_message_enabled || false,
       nextAwardImage: s.next_award_image || null,
@@ -650,6 +651,7 @@ app.put('/api/settings', async (req: Request, res: Response) => {
       brandTitle, 
       loginSubtitle, 
       variationPoints,
+      dailyArtGoal,
       motivationalMessage,
       motivationalMessageEnabled,
       nextAwardImage,
@@ -657,6 +659,23 @@ app.put('/api/settings', async (req: Request, res: Response) => {
       showAwardsChart,
       awardsHasUpdates
     } = req.body;
+
+    // Verificar e criar coluna daily_art_goal se não existir
+    try {
+      await pool.query(`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'system_settings' AND column_name = 'daily_art_goal'
+          ) THEN
+            ALTER TABLE system_settings ADD COLUMN daily_art_goal INTEGER DEFAULT 8;
+          END IF;
+        END $$;
+      `);
+    } catch (colError) {
+      console.error('Erro ao verificar/criar coluna daily_art_goal:', colError);
+    }
     
     // Se houver alterações relacionadas a premiações, ativar flag de atualizações
     const hasAwardRelatedChanges = 
@@ -666,33 +685,99 @@ app.put('/api/settings', async (req: Request, res: Response) => {
       chartEnabled !== undefined ||
       showAwardsChart !== undefined;
     
-    // Atualizar campos existentes e novos campos (usando COALESCE para não sobrescrever se null)
-    await pool.query(
-      `UPDATE system_settings SET 
-        logo_url = COALESCE($1, logo_url), 
-        brand_title = COALESCE($2, brand_title), 
-        login_subtitle = COALESCE($3, login_subtitle), 
-        variation_points = COALESCE($4, variation_points),
-        motivational_message = COALESCE($5, motivational_message),
-        motivational_message_enabled = COALESCE($6, motivational_message_enabled),
-        next_award_image = COALESCE($7, next_award_image),
-        chart_enabled = COALESCE($8, chart_enabled),
-        show_awards_chart = COALESCE($9, show_awards_chart),
-        awards_has_updates = COALESCE($10, awards_has_updates)
-      WHERE id = 1`,
-      [
-        logoUrl, 
-        brandTitle, 
-        loginSubtitle, 
-        variationPoints,
-        motivationalMessage,
-        motivationalMessageEnabled,
-        nextAwardImage,
-        chartEnabled,
-        showAwardsChart,
-        awardsHasUpdates
-      ]
-    );
+    // Atualizar campos existentes e novos campos
+    // Para dailyArtGoal e variationPoints, usar valor explícito se fornecido
+    const dailyArtGoalValue = dailyArtGoal !== undefined && dailyArtGoal !== null ? Number(dailyArtGoal) : undefined;
+    const variationPointsValue = variationPoints !== undefined && variationPoints !== null ? Number(variationPoints) : undefined;
+    
+    console.log('Valores a serem salvos:', { 
+      dailyArtGoal: dailyArtGoal, 
+      dailyArtGoalValue, 
+      variationPoints, 
+      variationPointsValue 
+    });
+    
+    // Construir query dinamicamente para atualizar apenas os campos fornecidos
+    const updates: string[] = [];
+    const values: any[] = [];
+    let paramIndex = 1;
+    
+    if (logoUrl !== undefined) {
+      updates.push(`logo_url = $${paramIndex}`);
+      values.push(logoUrl);
+      paramIndex++;
+    }
+    if (brandTitle !== undefined) {
+      updates.push(`brand_title = $${paramIndex}`);
+      values.push(brandTitle);
+      paramIndex++;
+    }
+    if (loginSubtitle !== undefined) {
+      updates.push(`login_subtitle = $${paramIndex}`);
+      values.push(loginSubtitle);
+      paramIndex++;
+    }
+    if (variationPointsValue !== undefined) {
+      updates.push(`variation_points = $${paramIndex}`);
+      values.push(variationPointsValue);
+      paramIndex++;
+    }
+    if (dailyArtGoalValue !== undefined) {
+      updates.push(`daily_art_goal = $${paramIndex}`);
+      values.push(dailyArtGoalValue);
+      paramIndex++;
+    }
+    if (motivationalMessage !== undefined) {
+      updates.push(`motivational_message = $${paramIndex}`);
+      values.push(motivationalMessage);
+      paramIndex++;
+    }
+    if (motivationalMessageEnabled !== undefined) {
+      updates.push(`motivational_message_enabled = $${paramIndex}`);
+      values.push(motivationalMessageEnabled);
+      paramIndex++;
+    }
+    if (nextAwardImage !== undefined) {
+      updates.push(`next_award_image = $${paramIndex}`);
+      values.push(nextAwardImage);
+      paramIndex++;
+    }
+    if (chartEnabled !== undefined) {
+      updates.push(`chart_enabled = $${paramIndex}`);
+      values.push(chartEnabled);
+      paramIndex++;
+    }
+    if (showAwardsChart !== undefined) {
+      updates.push(`show_awards_chart = $${paramIndex}`);
+      values.push(showAwardsChart);
+      paramIndex++;
+    }
+    if (awardsHasUpdates !== undefined) {
+      updates.push(`awards_has_updates = $${paramIndex}`);
+      values.push(awardsHasUpdates);
+      paramIndex++;
+    }
+    
+    if (updates.length === 0) {
+      return res.json({ success: true, message: 'Nenhuma alteração para salvar' });
+    }
+    
+    const query = `UPDATE system_settings SET ${updates.join(', ')} WHERE id = 1`;
+    console.log('Query SQL:', query);
+    console.log('Valores:', values);
+    
+    await pool.query(query, values);
+    
+    // Verificar o valor salvo
+    try {
+      const verifyResult = await pool.query('SELECT daily_art_goal, variation_points FROM system_settings WHERE id = 1');
+      console.log('Valores salvos no banco:', { 
+        daily_art_goal: verifyResult.rows[0]?.daily_art_goal, 
+        variation_points: verifyResult.rows[0]?.variation_points 
+      });
+    } catch (verifyError) {
+      console.error('Erro ao verificar valores salvos:', verifyError);
+    }
     
     // Se houver alterações relacionadas a premiações, ativar flag (exceto se awardsHasUpdates for explicitamente false)
     if (hasAwardRelatedChanges && awardsHasUpdates !== false) {
@@ -710,6 +795,7 @@ app.put('/api/settings', async (req: Request, res: Response) => {
       try {
         await pool.query(`
           ALTER TABLE system_settings 
+          ADD COLUMN IF NOT EXISTS daily_art_goal INTEGER DEFAULT 8,
           ADD COLUMN IF NOT EXISTS motivational_message TEXT,
           ADD COLUMN IF NOT EXISTS motivational_message_enabled BOOLEAN DEFAULT false,
           ADD COLUMN IF NOT EXISTS next_award_image TEXT,
@@ -723,29 +809,42 @@ app.put('/api/settings', async (req: Request, res: Response) => {
           brandTitle, 
           loginSubtitle, 
           variationPoints,
+          dailyArtGoal,
           motivationalMessage,
           motivationalMessageEnabled,
           nextAwardImage,
-          chartEnabled
+          chartEnabled,
+          showAwardsChart,
+          awardsHasUpdates
         } = req.body;
+        
+        const hasAwardRelatedChangesRetry = 
+          motivationalMessage !== undefined ||
+          motivationalMessageEnabled !== undefined ||
+          nextAwardImage !== undefined ||
+          chartEnabled !== undefined ||
+          showAwardsChart !== undefined;
+        
         await pool.query(
           `UPDATE system_settings SET 
             logo_url = COALESCE($1, logo_url), 
             brand_title = COALESCE($2, brand_title), 
             login_subtitle = COALESCE($3, login_subtitle), 
             variation_points = COALESCE($4, variation_points),
-            motivational_message = COALESCE($5, motivational_message),
-            motivational_message_enabled = COALESCE($6, motivational_message_enabled),
-            next_award_image = COALESCE($7, next_award_image),
-            chart_enabled = COALESCE($8, chart_enabled),
-            show_awards_chart = COALESCE($9, show_awards_chart),
-            awards_has_updates = COALESCE($10, awards_has_updates)
+            daily_art_goal = COALESCE($5, daily_art_goal),
+            motivational_message = COALESCE($6, motivational_message),
+            motivational_message_enabled = COALESCE($7, motivational_message_enabled),
+            next_award_image = COALESCE($8, next_award_image),
+            chart_enabled = COALESCE($9, chart_enabled),
+            show_awards_chart = COALESCE($10, show_awards_chart),
+            awards_has_updates = COALESCE($11, awards_has_updates)
           WHERE id = 1`,
           [
             logoUrl, 
             brandTitle, 
             loginSubtitle, 
             variationPoints,
+            dailyArtGoal !== undefined && dailyArtGoal !== null ? Number(dailyArtGoal) : null,
             motivationalMessage,
             motivationalMessageEnabled,
             nextAwardImage,
@@ -756,7 +855,7 @@ app.put('/api/settings', async (req: Request, res: Response) => {
         );
         
         // Se houver alterações relacionadas a premiações, ativar flag (exceto se awardsHasUpdates for explicitamente false)
-        if (hasAwardRelatedChanges && awardsHasUpdates !== false) {
+        if (hasAwardRelatedChangesRetry && awardsHasUpdates !== false) {
           try {
             await pool.query('UPDATE system_settings SET awards_has_updates = true WHERE id = 1');
           } catch (updateError) {

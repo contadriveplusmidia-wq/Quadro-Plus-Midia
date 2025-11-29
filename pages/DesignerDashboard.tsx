@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { Plus, Minus, Clock, Zap, TrendingUp, Trash2, ClipboardList, Target, CheckCircle, AlertTriangle } from 'lucide-react';
 import { DemandItem, DailyPerformanceResult, PerformanceStatus } from '../types';
+import { autoFocus } from '../utils/autoFocus';
 
 // Função centralizada para calcular status de performance diária
 const getDailyPerformanceStatus = (artsToday: number, dailyGoal: number): DailyPerformanceResult => {
@@ -83,11 +84,11 @@ export const DesignerDashboard: React.FC = () => {
   const totalArtsToday = todayDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
   const totalPointsToday = todayDemands.reduce((acc, d) => acc + d.totalPoints, 0);
 
-  // Calcular status de performance (meta fixa de 10 artes)
-  const dailyGoal = 10;
+  // Calcular status de performance usando meta configurável
+  const dailyGoal = settings.dailyArtGoal || 8;
   const performanceStatus = useMemo(() => 
     getDailyPerformanceStatus(totalArtsToday, dailyGoal), 
-    [totalArtsToday]
+    [totalArtsToday, dailyGoal]
   );
 
   // Detectar tema dark/light
@@ -151,6 +152,15 @@ export const DesignerDashboard: React.FC = () => {
 
     setItems([]);
   };
+
+  const formRef = useRef<HTMLDivElement>(null);
+
+  // AutoFocus quando a página carregar (para o formulário de nova demanda)
+  useEffect(() => {
+    if (formRef.current) {
+      autoFocus(formRef.current, 300);
+    }
+  }, []);
 
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString('pt-BR', { 
@@ -270,7 +280,7 @@ export const DesignerDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+        <div ref={formRef} className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
           <div className="flex items-center gap-2.5 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
             <ClipboardList className="text-slate-500 dark:text-slate-400" size={20} />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Nova Demanda</h2>

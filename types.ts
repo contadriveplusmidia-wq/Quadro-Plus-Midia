@@ -130,6 +130,7 @@ export interface SystemSettings {
   brandTitle?: string;
   loginSubtitle?: string;
   variationPoints?: number; // Global point value for variations
+  dailyArtGoal?: number; // Meta diária de artes para designers
   motivationalMessage?: string; // Mensagem motivacional para premiações
   motivationalMessageEnabled?: boolean; // Ativar/desativar mensagem motivacional
   nextAwardImage?: string; // Imagem grande da próxima premiação (Base64 or URL)

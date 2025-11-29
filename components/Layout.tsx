@@ -54,6 +54,17 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     }
   }, [sidebarCollapsed]);
 
+  // AutoFocus quando sidebar expandir
+  React.useEffect(() => {
+    if (!sidebarCollapsed) {
+      // Aguardar animação de expansão completar
+      setTimeout(() => {
+        const { autoFocus } = require('../utils/autoFocus');
+        autoFocus(document.querySelector('aside'), 200);
+      }, 300);
+    }
+  }, [sidebarCollapsed]);
+
   const toggleSidebarCollapse = () => {
     setSidebarCollapsed(prev => !prev);
   };
