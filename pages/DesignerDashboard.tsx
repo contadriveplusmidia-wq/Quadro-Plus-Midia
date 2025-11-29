@@ -177,15 +177,15 @@ export const DesignerDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-4 mb-2">
         <div 
-          className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg"
+          className="w-14 h-14 rounded-full flex items-center justify-center text-white font-semibold text-base shadow-md"
           style={{ backgroundColor: getAvatarBg() }}
         >
           {currentUser ? getInitials(currentUser.name) : 'U'}
         </div>
         <div>
-          <h1 className="text-xl font-bold text-slate-900 dark:text-white">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mb-1">
             Olá, {currentUser?.name?.split(' - ')[1] || currentUser?.name?.split(' ')[0]}
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-sm">
@@ -196,7 +196,7 @@ export const DesignerDashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Card dinâmico de Performance do Dia */}
-        <div className={`rounded-2xl p-6 relative overflow-hidden transition-all duration-300 ${
+        <div className={`rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-sm ${
           isDark 
             ? `${performanceStatus.colors.bgDark} border ${performanceStatus.colors.borderDark}` 
             : `bg-gradient-to-br ${
@@ -248,10 +248,10 @@ export const DesignerDashboard: React.FC = () => {
               </div>
             </div>
             
-            <div className={`mt-6 flex items-center gap-3 rounded-xl p-3 ${
+            <div className={`mt-6 flex items-center gap-3 rounded-xl p-3.5 backdrop-blur-sm ${
               isDark ? 'bg-white/10' : 'bg-white/20'
             }`}>
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+              <div className={`w-10 h-10 rounded-lg flex items-center justify-center backdrop-blur-sm ${
                 isDark ? 'bg-white/10' : 'bg-white/30'
               }`}>
                 <Target size={20} className={isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text} />
@@ -270,9 +270,9 @@ export const DesignerDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <ClipboardList className="text-slate-400" size={20} />
+        <div className="lg:col-span-2 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+          <div className="flex items-center gap-2.5 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+            <ClipboardList className="text-slate-500 dark:text-slate-400" size={20} />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Nova Demanda</h2>
           </div>
 
@@ -356,7 +356,7 @@ export const DesignerDashboard: React.FC = () => {
             <button
               onClick={handleAddItem}
               disabled={!selectedArtType}
-              className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-lg hover:border-brand-600 hover:text-brand-600 disabled:opacity-50 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-xl hover:border-brand-600 hover:text-brand-600 disabled:opacity-50 transition-all duration-200 hover:bg-brand-50 dark:hover:bg-brand-900/10"
             >
               <Plus size={18} />
               Adicionar Item
@@ -364,7 +364,7 @@ export const DesignerDashboard: React.FC = () => {
           </div>
 
           {items.length > 0 ? (
-            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+            <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
               {items.map((item, idx) => (
                 <div key={idx} className="p-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-700 last:border-0">
                   <div className="flex items-center gap-3">
@@ -383,7 +383,7 @@ export const DesignerDashboard: React.FC = () => {
                   </div>
                 </div>
               ))}
-              <div className="p-4 bg-brand-600 flex items-center justify-between">
+              <div className="p-4 bg-brand-600 flex items-center justify-between shadow-sm">
                 <span className="text-white font-medium">Total da Demanda</span>
                 <span className="text-white font-bold text-lg">
                   {items.reduce((acc, i) => acc + i.totalPoints, 0)} pts
@@ -391,7 +391,7 @@ export const DesignerDashboard: React.FC = () => {
               </div>
               <button
                 onClick={handleSubmit}
-                className="w-full py-3 bg-brand-700 hover:bg-brand-800 text-white font-semibold transition-colors"
+                className="w-full py-3.5 bg-brand-700 hover:bg-brand-800 text-white font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-brand-700/30"
               >
                 Registrar Demanda
               </button>
@@ -409,10 +409,10 @@ export const DesignerDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
         <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Clock className="text-slate-400" size={20} />
+          <div className="flex items-center gap-2.5">
+            <Clock className="text-slate-500 dark:text-slate-400" size={20} />
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Histórico de Hoje</h2>
           </div>
           <span className="text-sm text-slate-500 dark:text-slate-400">

@@ -48,10 +48,10 @@ export const DesignerFeedbacks: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mb-2">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Feedbacks</h1>
-          <p className="text-slate-500 dark:text-slate-400 mt-1">
+          <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mb-1">Feedbacks</h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {unviewedCount > 0 
               ? `Você tem ${unviewedCount} feedback${unviewedCount !== 1 ? 's' : ''} não visualizado${unviewedCount !== 1 ? 's' : ''}`
               : 'Todos os feedbacks foram visualizados'}
@@ -60,7 +60,7 @@ export const DesignerFeedbacks: React.FC = () => {
       </div>
 
       {myFeedbacks.length === 0 ? (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-12 text-center">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-12 text-center shadow-sm">
           <MessageSquare className="mx-auto text-slate-300 dark:text-slate-600 mb-4" size={48} />
           <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
             Nenhum feedback ainda
@@ -74,7 +74,7 @@ export const DesignerFeedbacks: React.FC = () => {
           {myFeedbacks.map(feedback => (
             <div 
               key={feedback.id}
-              className={`bg-white dark:bg-slate-900 rounded-xl border ${
+              className={`bg-white dark:bg-slate-900 rounded-2xl border shadow-sm ${
                 feedback.viewed 
                   ? 'border-slate-200 dark:border-slate-800' 
                   : 'border-brand-500 dark:border-brand-400'

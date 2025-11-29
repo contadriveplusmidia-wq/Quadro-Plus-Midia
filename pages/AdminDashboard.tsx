@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, RefreshCw } from 'lucide-react';
+import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, RefreshCw, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 type ChartMode = 'somaPoints' | 'somaArts' | 'mediaPoints' | 'mediaArts';
@@ -133,10 +133,32 @@ export const AdminDashboard: React.FC = () => {
       }
       case 'custom': {
         if (customStartDate && customEndDate) {
-          const start = new Date(customStartDate).getTime();
+          const start = new Date(customStartDate);
+          start.setHours(0, 0, 0, 0);
           const endDate = new Date(customEndDate);
           endDate.setHours(23, 59, 59, 999);
-          return { start, end: endDate.getTime() };
+          
+          // Se as datas são iguais, retornar apenas um dia
+          if (customStartDate === customEndDate) {
+            return { start: start.getTime(), end: endDate.getTime() };
+          }
+          
+          return { start: start.getTime(), end: endDate.getTime() };
+        }
+        // Se apenas uma data foi selecionada, usar como início e fim
+        if (customStartDate) {
+          const start = new Date(customStartDate);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(customStartDate);
+          end.setHours(23, 59, 59, 999);
+          return { start: start.getTime(), end: end.getTime() };
+        }
+        if (customEndDate) {
+          const start = new Date(customEndDate);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(customEndDate);
+          end.setHours(23, 59, 59, 999);
+          return { start: start.getTime(), end: end.getTime() };
         }
         return { start: today.getTime(), end: todayEnd.getTime() };
       }
@@ -243,16 +265,16 @@ export const AdminDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-2">
-            <Filter className="text-brand-600" size={20} />
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Visao Geral</h2>
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <Filter className="text-brand-600 dark:text-brand-400" size={20} />
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Visão Geral</h2>
           </div>
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 disabled:opacity-50 shadow-sm hover:shadow"
           >
             <RefreshCw 
               size={16} 
@@ -269,7 +291,7 @@ export const AdminDashboard: React.FC = () => {
               <select
                 value={selectedDesigner}
                 onChange={(e) => setSelectedDesigner(e.target.value)}
-                className="w-full lg:w-56 pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:ring-2 focus:ring-brand-600 outline-none text-sm"
+                className="w-full lg:w-56 pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none text-sm transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600"
               >
                 <option value="all">Todos os Designers</option>
                 {designers.map(d => (
@@ -286,7 +308,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
                 <button
                   onClick={() => setDateFilter('hoje')}
-                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                     dateFilter === 'hoje'
                       ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -318,35 +340,72 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
                   <input
                     type="date"
                     value={customStartDate || formatDateForInput(start)}
                     onChange={(e) => {
-                      setCustomStartDate(e.target.value);
+                      const selectedDate = e.target.value;
+                      setCustomStartDate(selectedDate);
+                      // Se não há data final ou a data inicial é maior que a final, ajustar a data final
+                      if (!customEndDate || selectedDate > customEndDate) {
+                        setCustomEndDate(selectedDate);
+                      }
                       setDateFilter('custom');
                     }}
-                    className="pl-3 pr-2 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                    max={customEndDate || undefined}
+                    onClick={(e) => {
+                      // Garantir que o calendário abra ao clicar
+                      (e.target as HTMLInputElement).showPicker?.();
+                    }}
+                    className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer"
+                    title="Data inicial"
                   />
                 </div>
-                <span className="text-slate-400">→</span>
+                <span className="text-slate-400 dark:text-slate-500 font-medium">até</span>
                 <div className="relative">
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
                   <input
                     type="date"
                     value={customEndDate || formatDateForInput(end)}
                     onChange={(e) => {
-                      setCustomEndDate(e.target.value);
+                      const selectedDate = e.target.value;
+                      setCustomEndDate(selectedDate);
+                      // Se a data final é menor que a inicial, ajustar a data inicial
+                      if (selectedDate < customStartDate) {
+                        setCustomStartDate(selectedDate);
+                      }
                       setDateFilter('custom');
                     }}
-                    className="pl-3 pr-2 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm"
+                    min={customStartDate || undefined}
+                    onClick={(e) => {
+                      // Garantir que o calendário abra ao clicar
+                      (e.target as HTMLInputElement).showPicker?.();
+                    }}
+                    className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer"
+                    title="Data final"
                   />
                 </div>
+                {(customStartDate || customEndDate) && (
+                  <button
+                    onClick={() => {
+                      setCustomStartDate('');
+                      setCustomEndDate('');
+                      setDateFilter('semana');
+                    }}
+                    className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200"
+                    title="Limpar seleção"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-5 border border-blue-200 dark:border-blue-800">
+          <div className="bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 rounded-xl p-5 border border-blue-200 dark:border-blue-800 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 uppercase tracking-wide">Pontos Totais</p>
@@ -358,7 +417,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Artes Feitas</p>
@@ -370,7 +429,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Demandas</p>
@@ -382,7 +441,7 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700">
+          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Top Performance</p>
@@ -397,24 +456,28 @@ export const AdminDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <div className="flex items-center gap-2">
-              <BarChart3 className="text-slate-400" size={20} />
+            <div className="flex items-center gap-2.5">
+              <BarChart3 className="text-slate-500 dark:text-slate-400" size={20} />
               <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
                 Produtividade por Designer
               </h3>
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              {workingDays} dia(s) considerado(s) para a media (Seg-Sab).
+              {customStartDate && customEndDate && customStartDate === customEndDate
+                ? `Exibindo dados do dia ${new Date(customStartDate).toLocaleDateString('pt-BR')}`
+                : customStartDate && customEndDate
+                ? `Período: ${new Date(customStartDate).toLocaleDateString('pt-BR')} até ${new Date(customEndDate).toLocaleDateString('pt-BR')} (${workingDays} dia${workingDays !== 1 ? 's' : ''} útil${workingDays !== 1 ? 'is' : ''})`
+                : `${workingDays} dia(s) considerado(s) para a média (Seg-Sab).`}
             </p>
           </div>
 
           <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
             <button
               onClick={() => setChartMode('somaPoints')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 chartMode === 'somaPoints'
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400'
@@ -424,7 +487,7 @@ export const AdminDashboard: React.FC = () => {
             </button>
             <button
               onClick={() => setChartMode('somaArts')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 chartMode === 'somaArts'
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400'
@@ -434,7 +497,7 @@ export const AdminDashboard: React.FC = () => {
             </button>
             <button
               onClick={() => setChartMode('mediaPoints')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 chartMode === 'mediaPoints'
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400'
@@ -444,7 +507,7 @@ export const AdminDashboard: React.FC = () => {
             </button>
             <button
               onClick={() => setChartMode('mediaArts')}
-              className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 chartMode === 'mediaArts'
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400'

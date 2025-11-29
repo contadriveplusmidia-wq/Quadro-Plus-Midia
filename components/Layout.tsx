@@ -26,6 +26,15 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
 
+  // Atualizar título da página dinamicamente
+  React.useEffect(() => {
+    if (settings?.brandTitle) {
+      document.title = settings.brandTitle;
+    } else {
+      document.title = 'DesignFlow Pro';
+    }
+  }, [settings?.brandTitle]);
+
   const handleLogout = () => {
     logout();
     navigate('/login');
@@ -74,13 +83,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         <div className="flex flex-col h-full">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800">
-            <h1 className="text-xl font-bold text-brand-600 dark:text-brand-400">
-              {settings.brandTitle || 'DesignFlow Pro'}
-            </h1>
+          <div className="p-5 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex items-center gap-2.5">
+              {settings.logoUrl ? (
+                <img 
+                  src={settings.logoUrl} 
+                  alt={settings.brandTitle || 'Logo'} 
+                  className="h-9 w-9 object-contain flex-shrink-0 rounded-lg"
+                />
+              ) : null}
+              <h1 className="text-lg font-semibold text-brand-600 dark:text-brand-400 leading-tight">
+                {settings.brandTitle || 'DesignFlow Pro'}
+              </h1>
+            </div>
           </div>
 
-          <nav className="flex-1 p-4 space-y-2">
+          <nav className="flex-1 p-3 space-y-1.5 overflow-y-auto">
             {links.map(link => {
               const isActive = location.pathname === link.to;
               return (
@@ -89,10 +107,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   to={link.to}
                   onClick={() => setSidebarOpen(false)}
                   className={`
-                    flex items-center gap-3 px-4 py-3 rounded-lg transition-colors
+                    flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all duration-200
                     ${isActive 
-                      ? 'bg-brand-600 text-white' 
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'}
+                      ? 'bg-brand-600 text-white shadow-sm shadow-brand-600/20' 
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-slate-200'}
                   `}
                 >
                   <link.icon size={20} />
@@ -118,10 +136,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             })}
           </nav>
 
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-            <div className="flex items-center gap-3 mb-4">
+          <div className="p-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+            <div className="flex items-center gap-3 px-1 py-2">
               <div 
-                className="w-10 h-10 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold"
+                className="w-9 h-9 rounded-full bg-brand-600 flex items-center justify-center text-white font-semibold text-sm shadow-sm"
                 style={{ backgroundColor: currentUser?.avatarColor }}
               >
                 {currentUser?.name?.charAt(0).toUpperCase()}
@@ -138,18 +156,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             
             <button
               onClick={toggleTheme}
-              className="w-full flex items-center gap-3 px-4 py-2 mb-2 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 rounded-xl transition-all duration-200 hover:text-slate-900 dark:hover:text-slate-200"
             >
-              {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-              <span className="font-medium">{theme === 'dark' ? 'Tema Claro' : 'Tema Escuro'}</span>
+              {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              <span className="font-medium text-sm">{theme === 'dark' ? 'Tema Claro' : 'Tema Escuro'}</span>
             </button>
 
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+              className="w-full flex items-center gap-3 px-3.5 py-2.5 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-xl transition-all duration-200"
             >
-              <LogOut size={20} />
-              <span className="font-medium">Sair</span>
+              <LogOut size={18} />
+              <span className="font-medium text-sm">Sair</span>
             </button>
           </div>
         </div>
@@ -162,7 +180,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         />
       )}
 
-      <main className="flex-1 p-4 lg:p-8 overflow-auto">
+      <main className="flex-1 p-4 lg:p-6 xl:p-8 overflow-auto bg-slate-50 dark:bg-slate-950">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

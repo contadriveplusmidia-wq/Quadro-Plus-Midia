@@ -20,6 +20,15 @@ export const Login: React.FC = () => {
     }
   }, [currentUser, navigate]);
 
+  // Atualizar título da página dinamicamente
+  useEffect(() => {
+    if (settings?.brandTitle) {
+      document.title = settings.brandTitle;
+    } else {
+      document.title = 'DesignFlow Pro';
+    }
+  }, [settings?.brandTitle]);
+
   const filteredUsers = users.filter(u => u.active && u.role === selectedRole);
 
   const selectedUser = users.find(u => u.id === selectedUserId);
@@ -87,12 +96,12 @@ export const Login: React.FC = () => {
       </button>
 
       <div className="w-full max-w-md">
-        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 border border-slate-200 dark:border-slate-800">
-          <div className="text-center mb-8">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl p-8 md:p-10 border border-slate-200 dark:border-slate-800">
+          <div className="text-center mb-10">
             {settings.logoUrl ? (
-              <img src={settings.logoUrl} alt="Logo" className="h-20 mx-auto mb-4" />
+              <img src={settings.logoUrl} alt={settings.brandTitle || 'Logo'} className="h-24 mx-auto mb-5 object-contain" />
             ) : (
-              <div className="flex justify-center mb-4">
+              <div className="flex justify-center mb-5">
                 <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M40 10L60 70H50L40 35L30 70H20L40 10Z" stroke="#1e293b" strokeWidth="3" fill="none"/>
                   <path d="M25 55H55" stroke="#4F46E5" strokeWidth="3"/>
@@ -100,26 +109,25 @@ export const Login: React.FC = () => {
                 </svg>
               </div>
             )}
-            <h1 className="text-2xl font-bold">
-              <span className="text-slate-900 dark:text-white">PLUS</span>
-              <span className="text-brand-600">MIDIA</span>
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-white mb-2">
+              {settings.brandTitle || 'DesignFlow Pro'}
             </h1>
-            <p className="text-slate-500 dark:text-slate-400 mt-2">
-              Faça login para continuar
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {settings.loginSubtitle || 'Faça login para continuar'}
             </p>
           </div>
 
-          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 mb-6">
+          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-full p-1 mb-7">
             <button
               type="button"
               onClick={() => {
                 setSelectedRole('DESIGNER');
                 setSelectedUserId('');
               }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
                 selectedRole === 'DESIGNER'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm shadow-slate-200/50 dark:shadow-slate-900/50'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
               }`}
             >
               <User size={18} />
@@ -131,10 +139,10 @@ export const Login: React.FC = () => {
                 setSelectedRole('ADM');
                 setSelectedUserId('');
               }}
-              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium transition-all ${
+              className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
                 selectedRole === 'ADM'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-500 dark:text-slate-400'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm shadow-slate-200/50 dark:shadow-slate-900/50'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
               }`}
             >
               <Shield size={18} />
@@ -159,7 +167,7 @@ export const Login: React.FC = () => {
                   <select
                     value={selectedUserId}
                     onChange={(e) => setSelectedUserId(e.target.value)}
-                    className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all appearance-none text-slate-900 dark:text-white"
+                    className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 appearance-none text-slate-900 dark:text-white hover:border-slate-300 dark:hover:border-slate-600"
                     required
                   >
                     <option value="">Selecione um perfil</option>
@@ -222,7 +230,7 @@ export const Login: React.FC = () => {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all"
+                  className="w-full pl-12 pr-4 py-3.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600"
                   required
                 />
               </div>
@@ -231,7 +239,7 @@ export const Login: React.FC = () => {
             <button
               type="submit"
               disabled={loading || (selectedRole === 'DESIGNER' && !selectedUserId)}
-              className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-600/30"
+              className="w-full py-3.5 bg-brand-600 hover:bg-brand-700 text-white font-semibold rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-brand-600/30 hover:shadow-xl hover:shadow-brand-600/40"
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </button>
