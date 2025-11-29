@@ -15,3 +15,4 @@ FROM information_schema.columns
 WHERE table_name = 'system_settings'
 AND column_name = 'awards_has_updates';
 
+

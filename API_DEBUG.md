@@ -51,3 +51,4 @@ Se der erro, execute o script: `create_tags_tables.sql`
 3. Tente criar uma tag novamente
 4. Verifique o console do navegador (F12) para erros
 
+

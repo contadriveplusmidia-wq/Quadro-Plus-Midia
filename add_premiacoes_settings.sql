@@ -19,3 +19,4 @@ WHERE table_name = 'system_settings'
 AND column_name IN ('motivational_message', 'motivational_message_enabled', 'next_award_image', 'chart_enabled')
 ORDER BY ordinal_position;
 
+

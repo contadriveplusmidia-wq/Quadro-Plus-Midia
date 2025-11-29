@@ -39,3 +39,4 @@ ORDER BY ordinal_position;
 -- INSERT INTO awards (id, designer_id, designer_name, month, description, image_url, created_at)
 -- VALUES ('test-123', 'd1', 'Teste Designer', 'Janeiro', 'Teste', NULL, EXTRACT(EPOCH FROM NOW())::BIGINT * 1000);
 
+

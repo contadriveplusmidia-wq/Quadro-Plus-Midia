@@ -50,3 +50,4 @@ CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
 
 A tabela `link_tags` será criada automaticamente quando você criar o primeiro link útil.
 
+

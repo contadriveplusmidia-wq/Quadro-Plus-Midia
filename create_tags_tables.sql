@@ -22,3 +22,4 @@ CREATE INDEX IF NOT EXISTS idx_link_tags_link_id ON link_tags(link_id);
 CREATE INDEX IF NOT EXISTS idx_link_tags_tag_id ON link_tags(tag_id);
 CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name);
 
+

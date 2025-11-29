@@ -52,3 +52,4 @@ O arquivo `create_tags_tables.sql` já contém esse SQL. Você pode:
 ## Verificação
 Após criar as tabelas, teste novamente criando uma tag. O erro deve desaparecer.
 
+

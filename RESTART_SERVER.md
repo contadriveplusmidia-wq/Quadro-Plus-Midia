@@ -47,3 +47,4 @@ curl -X POST http://localhost:3001/api/tags \
 
 As rotas são carregadas quando o servidor inicia, então mudanças no código só têm efeito após reiniciar.
 
+
