@@ -13,7 +13,8 @@ import {
   Sun,
   Moon,
   Trophy,
-  Link2
+  Link2,
+  Funnel
 } from 'lucide-react';
 
 interface LayoutProps {
@@ -91,8 +92,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   alt={settings.brandTitle || 'Logo'} 
                   className="h-9 w-9 object-contain flex-shrink-0 rounded-lg"
                 />
-              ) : null}
-              <h1 className="text-lg font-semibold text-brand-600 dark:text-brand-400 leading-tight">
+              ) : (
+                <Funnel className="flex-shrink-0" size={20} style={{ color: '#280FFF' }} />
+              )}
+              <h1 className="text-lg font-semibold text-slate-900 dark:text-white leading-tight">
                 {settings.brandTitle || 'DesignFlow Pro'}
               </h1>
             </div>

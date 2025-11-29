@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, RefreshCw, X } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { DatePicker } from '../components/DatePicker';
 
 type ChartMode = 'somaPoints' | 'somaArts' | 'mediaPoints' | 'mediaArts';
 type DateFilterType = 'hoje' | 'semana' | 'mes' | 'custom';
@@ -291,7 +292,7 @@ export const AdminDashboard: React.FC = () => {
               <select
                 value={selectedDesigner}
                 onChange={(e) => setSelectedDesigner(e.target.value)}
-                className="w-full lg:w-56 pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none text-sm transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600"
+                className="w-full lg:w-56 pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none text-sm font-medium text-slate-900 dark:text-white transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow"
               >
                 <option value="all">Todos os Designers</option>
                 {designers.map(d => (
@@ -339,53 +340,35 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
-                  <input
-                    type="date"
-                    value={customStartDate || formatDateForInput(start)}
-                    onChange={(e) => {
-                      const selectedDate = e.target.value;
-                      setCustomStartDate(selectedDate);
-                      // Se não há data final ou a data inicial é maior que a final, ajustar a data final
-                      if (!customEndDate || selectedDate > customEndDate) {
-                        setCustomEndDate(selectedDate);
-                      }
-                      setDateFilter('custom');
-                    }}
-                    max={customEndDate || undefined}
-                    onClick={(e) => {
-                      // Garantir que o calendário abra ao clicar
-                      (e.target as HTMLInputElement).showPicker?.();
-                    }}
-                    className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer"
-                    title="Data inicial"
-                  />
-                </div>
-                <span className="text-slate-400 dark:text-slate-500 font-medium">até</span>
-                <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
-                  <input
-                    type="date"
-                    value={customEndDate || formatDateForInput(end)}
-                    onChange={(e) => {
-                      const selectedDate = e.target.value;
+                <DatePicker
+                  value={customStartDate || formatDateForInput(start)}
+                  onChange={(selectedDate) => {
+                    setCustomStartDate(selectedDate);
+                    // Se não há data final ou a data inicial é maior que a final, ajustar a data final
+                    if (!customEndDate || selectedDate > customEndDate) {
                       setCustomEndDate(selectedDate);
-                      // Se a data final é menor que a inicial, ajustar a data inicial
-                      if (selectedDate < customStartDate) {
-                        setCustomStartDate(selectedDate);
-                      }
-                      setDateFilter('custom');
-                    }}
-                    min={customStartDate || undefined}
-                    onClick={(e) => {
-                      // Garantir que o calendário abra ao clicar
-                      (e.target as HTMLInputElement).showPicker?.();
-                    }}
-                    className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer"
-                    title="Data final"
-                  />
-                </div>
+                    }
+                    setDateFilter('custom');
+                  }}
+                  max={customEndDate || undefined}
+                  title="Data inicial"
+                  placeholder="Data inicial"
+                />
+                <span className="text-slate-400 dark:text-slate-500 font-medium text-sm">até</span>
+                <DatePicker
+                  value={customEndDate || formatDateForInput(end)}
+                  onChange={(selectedDate) => {
+                    setCustomEndDate(selectedDate);
+                    // Se a data final é menor que a inicial, ajustar a data inicial
+                    if (selectedDate < customStartDate) {
+                      setCustomStartDate(selectedDate);
+                    }
+                    setDateFilter('custom');
+                  }}
+                  min={customStartDate || undefined}
+                  title="Data final"
+                  placeholder="Data final"
+                />
                 {(customStartDate || customEndDate) && (
                   <button
                     onClick={() => {
@@ -393,7 +376,7 @@ export const AdminDashboard: React.FC = () => {
                       setCustomEndDate('');
                       setDateFilter('semana');
                     }}
-                    className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200"
+                    className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 shadow-sm hover:shadow"
                     title="Limpar seleção"
                   >
                     <X size={16} />

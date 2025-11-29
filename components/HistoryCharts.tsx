@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend, Cell } from 'recharts';
-import { BarChart3, TrendingUp, Calendar } from 'lucide-react';
+import { BarChart3, TrendingUp, Calendar, ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Demand, User } from '../types';
 
 type ChartTab = 'semana' | 'mes' | 'ano';
@@ -77,34 +77,102 @@ const getDesignerColor = (designer: User, index: number): string => {
   return DEFAULT_BLUE;
 };
 
-// Função para obter produtividade semanal (semanas do mês atual)
-const getWeeklyProductivity = (demands: Demand[], designers: User[]) => {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
+// Função para obter produtividade semanal (semanas do mês selecionado)
+// Cada semana considera apenas dias úteis: segunda a sábado (excluindo domingos)
+const getWeeklyProductivity = (demands: Demand[], designers: User[], selectedYear: number, selectedMonth: number) => {
+  // Primeiro dia do mês selecionado
+  const firstDay = new Date(selectedYear, selectedMonth, 1);
+  // Último dia do mês selecionado
+  const lastDay = new Date(selectedYear, selectedMonth + 1, 0);
   
-  // Primeiro dia do mês
-  const firstDay = new Date(year, month, 1);
-  // Último dia do mês
-  const lastDay = new Date(year, month + 1, 0);
-  
-  // Calcular semanas do mês
-  const weeks: { start: Date; end: Date; label: string }[] = [];
+  // Encontrar a segunda-feira da semana que contém o primeiro dia do mês
+  const firstDayOfWeek = firstDay.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
   let weekStart = new Date(firstDay);
-  let weekNum = 1;
   
-  while (weekStart <= lastDay) {
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-    if (weekEnd > lastDay) weekEnd.setTime(lastDay.getTime());
+  // Se o primeiro dia não é segunda-feira, voltar para a segunda-feira daquela semana
+  if (firstDayOfWeek === 0) {
+    // Se for domingo, voltar 6 dias para chegar na segunda-feira anterior
+    weekStart.setDate(weekStart.getDate() - 6);
+  } else if (firstDayOfWeek !== 1) {
+    // Se não for segunda-feira (terça a sábado), voltar para a segunda-feira daquela semana
+    weekStart.setDate(weekStart.getDate() - (firstDayOfWeek - 1));
+  }
+  
+  // Calcular semanas do mês (segunda a sábado, excluindo domingos)
+  const weeks: { start: Date; end: Date; label: string }[] = [];
+  let weekNum = 1;
+  let currentWeekStart = new Date(weekStart);
+  
+  // Continuar enquanto a semana tem interseção com o mês selecionado
+  while (true) {
+    // Sábado da semana (5 dias após a segunda) - fim da semana útil (excluindo domingo)
+    const weekEnd = new Date(currentWeekStart);
+    weekEnd.setDate(weekEnd.getDate() + 5); // Segunda + 5 dias = Sábado
+    weekEnd.setHours(23, 59, 59, 999);
+    
+    // Verificar se a semana tem interseção com o mês selecionado
+    // A semana tem interseção se: weekEnd >= firstDay E currentWeekStart <= lastDay
+    if (weekEnd < firstDay) {
+      // Semana termina antes do mês começar, avançar para próxima semana
+      currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+      continue;
+    }
+    
+    if (currentWeekStart > lastDay) {
+      // Semana começa depois do mês terminar, parar
+      break;
+    }
+    
+    // Ajustar início e fim para não ultrapassar os limites do mês
+    // Mas garantir que não incluamos domingos
+    let actualStart = currentWeekStart < firstDay ? new Date(firstDay) : new Date(currentWeekStart);
+    let actualEnd = weekEnd > lastDay ? new Date(lastDay) : new Date(weekEnd);
+    
+    // Se o actualStart for domingo, avançar para segunda
+    if (actualStart.getDay() === 0) {
+      actualStart.setDate(actualStart.getDate() + 1);
+    }
+    
+    // Se o actualEnd for domingo, voltar para sábado
+    if (actualEnd.getDay() === 0) {
+      actualEnd.setDate(actualEnd.getDate() - 1);
+      actualEnd.setHours(23, 59, 59, 999);
+    }
+    
+    // Verificar se ainda há interseção válida (não apenas domingo)
+    if (actualStart > actualEnd || actualStart > lastDay || actualEnd < firstDay) {
+      // Sem interseção válida, avançar para próxima semana
+      currentWeekStart.setDate(currentWeekStart.getDate() + 7);
+      continue;
+    }
+    
+    // Formatar label com datas (mostrar apenas dias do mês selecionado)
+    const startDay = actualStart.getDate();
+    const endDay = actualEnd.getDate();
+    const startMonth = actualStart.getMonth() + 1;
+    const endMonth = actualEnd.getMonth() + 1;
+    const selectedMonthNum = selectedMonth + 1;
+    
+    let label = `Sem ${weekNum}`;
+    if (startMonth === selectedMonthNum && endMonth === selectedMonthNum) {
+      // Semana completa ou parcial dentro do mês (segunda a sábado)
+      label = `Sem ${weekNum} (${startDay}-${endDay})`;
+    } else if (startMonth === selectedMonthNum) {
+      // Semana começa no mês mas termina no próximo
+      label = `Sem ${weekNum} (${startDay}-${endDay}/${endMonth})`;
+    } else if (endMonth === selectedMonthNum) {
+      // Semana começa no mês anterior mas termina no mês selecionado
+      label = `Sem ${weekNum} (${startDay}/${startMonth}-${endDay})`;
+    }
     
     weeks.push({
-      start: new Date(weekStart),
-      end: new Date(weekEnd),
-      label: `Semana ${weekNum}`
+      start: new Date(actualStart),
+      end: new Date(actualEnd),
+      label
     });
     
-    weekStart.setDate(weekStart.getDate() + 7);
+    // Avançar para a próxima segunda-feira
+    currentWeekStart.setDate(currentWeekStart.getDate() + 7);
     weekNum++;
   }
   
@@ -115,9 +183,22 @@ const getWeeklyProductivity = (demands: Demand[], designers: User[]) => {
     designers.forEach((designer, idx) => {
       const designerDemands = demands.filter(d => {
         const demandDate = new Date(d.timestamp);
+        const dayOfWeek = demandDate.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
+        
+        // Ignorar domingos (dayOfWeek === 0)
+        if (dayOfWeek === 0) {
+          return false;
+        }
+        
+        demandDate.setHours(0, 0, 0, 0);
+        const weekStartTime = new Date(week.start);
+        weekStartTime.setHours(0, 0, 0, 0);
+        const weekEndTime = new Date(week.end);
+        weekEndTime.setHours(23, 59, 59, 999);
+        
         return d.userId === designer.id && 
-               demandDate >= week.start && 
-               demandDate <= week.end;
+               demandDate.getTime() >= weekStartTime.getTime() && 
+               demandDate.getTime() <= weekEndTime.getTime();
       });
       
       const shortName = designer.name.split(' - ')[1] || designer.name.split(' ')[0];
@@ -192,8 +273,11 @@ const getYearlyProductivity = (demands: Demand[], designers: User[]) => {
 };
 
 export const HistoryCharts: React.FC<HistoryChartsProps> = ({ demands, designers }) => {
+  const now = new Date();
   const [activeTab, setActiveTab] = useState<ChartTab>('semana');
   const [isDark, setIsDark] = useState(false);
+  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
 
   // Detectar tema claro/escuro
   useEffect(() => {
@@ -209,7 +293,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({ demands, designers
     return () => observer.disconnect();
   }, []);
 
-  const weeklyData = useMemo(() => getWeeklyProductivity(demands, designers), [demands, designers]);
+  const weeklyData = useMemo(() => getWeeklyProductivity(demands, designers, selectedYear, selectedMonth), [demands, designers, selectedYear, selectedMonth]);
   const monthlyData = useMemo(() => getMonthlyProductivity(demands, designers), [demands, designers]);
   const yearlyData = useMemo(() => getYearlyProductivity(demands, designers), [demands, designers]);
 
@@ -226,19 +310,47 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({ demands, designers
     { id: 'ano', label: 'Ano', icon: <BarChart3 size={16} /> },
   ];
 
-  const now = new Date();
   const monthNames = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  
+  // Funções para navegar entre meses
+  const handlePreviousMonth = () => {
+    if (selectedMonth === 0) {
+      setSelectedMonth(11);
+      setSelectedYear(selectedYear - 1);
+    } else {
+      setSelectedMonth(selectedMonth - 1);
+    }
+  };
+  
+  const handleNextMonth = () => {
+    if (selectedMonth === 11) {
+      setSelectedMonth(0);
+      setSelectedYear(selectedYear + 1);
+    } else {
+      setSelectedMonth(selectedMonth + 1);
+    }
+  };
+  
+  const handleResetToCurrent = () => {
+    setSelectedYear(now.getFullYear());
+    setSelectedMonth(now.getMonth());
+  };
+  
+  // Função para formatar data para input month
+  const formatMonthForInput = (year: number, month: number): string => {
+    return `${year}-${String(month + 1).padStart(2, '0')}`;
+  };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-            <BarChart3 className="text-brand-600" size={20} />
+            <BarChart3 className="text-brand-600 dark:text-brand-400" size={20} />
             Gráficos de Produtividade
           </h3>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            {activeTab === 'semana' && `Semanas de ${monthNames[now.getMonth()]} ${now.getFullYear()}`}
+            {activeTab === 'semana' && `Semanas de ${monthNames[selectedMonth]} ${selectedYear}`}
             {activeTab === 'mes' && `Meses de ${now.getFullYear()}`}
             {activeTab === 'ano' && `Consolidado ${now.getFullYear()}`}
           </p>
@@ -265,6 +377,61 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({ demands, designers
       {/* Tab Semana - Gráfico de Barras */}
       {activeTab === 'semana' && (
         <div>
+          {/* Seletor de Período para Gráfico Semanal */}
+          <div className="mb-6 flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700">
+            <div className="flex items-center gap-2">
+              <Calendar className="text-slate-500 dark:text-slate-400" size={18} />
+              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Período:</span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePreviousMonth}
+                className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-sm hover:shadow"
+                title="Mês anterior"
+              >
+                <ChevronLeft size={18} />
+              </button>
+              
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none z-10" size={16} />
+                <input
+                  type="month"
+                  value={formatMonthForInput(selectedYear, selectedMonth)}
+                  onChange={(e) => {
+                    const [year, month] = e.target.value.split('-').map(Number);
+                    setSelectedYear(year);
+                    setSelectedMonth(month - 1);
+                  }}
+                  className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-sm hover:shadow"
+                  title="Selecionar mês e ano"
+                  onClick={(e) => {
+                    (e.target as HTMLInputElement).showPicker?.();
+                  }}
+                />
+              </div>
+              
+              <button
+                onClick={handleNextMonth}
+                className="p-2 hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all duration-200 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white shadow-sm hover:shadow"
+                title="Próximo mês"
+              >
+                <ChevronRight size={18} />
+              </button>
+              
+              {(selectedYear !== now.getFullYear() || selectedMonth !== now.getMonth()) && (
+                <button
+                  onClick={handleResetToCurrent}
+                  className="px-3 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white dark:hover:bg-slate-700 rounded-xl transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow"
+                  title="Voltar para o mês atual"
+                >
+                  <X size={14} />
+                  Hoje
+                </button>
+              )}
+            </div>
+          </div>
+          
           {weeklyData.length > 0 && designers.length > 0 ? (
             <ResponsiveContainer width="100%" height={350}>
               <BarChart data={weeklyData} barCategoryGap="15%">

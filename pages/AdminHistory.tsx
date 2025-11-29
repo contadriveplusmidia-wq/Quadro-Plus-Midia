@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Calendar, Clock, ChevronDown, Users, Filter } from 'lucide-react';
+import { Calendar, Clock, ChevronDown, Users, Filter, X } from 'lucide-react';
 import { TimeFilter, WorkSessionRow } from '../types';
 import { HistoryCharts } from '../components/HistoryCharts';
+import { DatePicker } from '../components/DatePicker';
 
 export const AdminHistory: React.FC = () => {
   const { users, demands, workSessions, adminFilters, setAdminFilters } = useApp();
   const [viewMode, setViewMode] = useState<'sessions' | 'demands' | 'charts'>('sessions');
+  const [customStartDate, setCustomStartDate] = useState<string>('');
+  const [customEndDate, setCustomEndDate] = useState<string>('');
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -34,6 +37,35 @@ export const AdminHistory: React.FC = () => {
         const yearStart = new Date(now.getFullYear(), 0, 1);
         return { start: yearStart.getTime(), end: now.getTime() };
       case 'custom':
+        if (customStartDate && customEndDate) {
+          const start = new Date(customStartDate);
+          start.setHours(0, 0, 0, 0);
+          const endDate = new Date(customEndDate);
+          endDate.setHours(23, 59, 59, 999);
+          
+          // Se as datas são iguais, retornar apenas um dia
+          if (customStartDate === customEndDate) {
+            return { start: start.getTime(), end: endDate.getTime() };
+          }
+          
+          return { start: start.getTime(), end: endDate.getTime() };
+        }
+        // Se apenas uma data foi selecionada, usar como início e fim
+        if (customStartDate) {
+          const start = new Date(customStartDate);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(customStartDate);
+          end.setHours(23, 59, 59, 999);
+          return { start: start.getTime(), end: end.getTime() };
+        }
+        if (customEndDate) {
+          const start = new Date(customEndDate);
+          start.setHours(0, 0, 0, 0);
+          const end = new Date(customEndDate);
+          end.setHours(23, 59, 59, 999);
+          return { start: start.getTime(), end: end.getTime() };
+        }
+        // Fallback para customRange do adminFilters se existir
         if (adminFilters.customRange) {
           return {
             start: adminFilters.customRange.start.getTime(),
@@ -96,7 +128,7 @@ export const AdminHistory: React.FC = () => {
         timestamp: session.timestamp
       };
     }).sort((a, b) => b.timestamp - a.timestamp);
-  }, [workSessions, demands, users, adminFilters]);
+  }, [workSessions, demands, users, adminFilters, customStartDate, customEndDate]);
 
   const filteredDemands = useMemo(() => {
     const { start, end } = getDateRange();
@@ -107,7 +139,21 @@ export const AdminHistory: React.FC = () => {
     }
     
     return filtered.sort((a, b) => b.timestamp - a.timestamp);
-  }, [demands, adminFilters]);
+  }, [demands, adminFilters, customStartDate, customEndDate]);
+
+  // Calcular soma total de artes do período selecionado
+  const totalArts = useMemo(() => {
+    return filteredDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
+  }, [filteredDemands]);
+
+  // Função para formatar data para input
+  const formatDateForInput = (timestamp: number): string => {
+    const date = new Date(timestamp);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
   const formatDateTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('pt-BR', {
@@ -162,44 +208,112 @@ export const AdminHistory: React.FC = () => {
             </button>
           </div>
 
-          <div className="relative">
+          <div className="flex items-center gap-2">
+            <div className="relative">
             <select
               value={adminFilters.period}
-              onChange={(e) => setAdminFilters({ ...adminFilters, period: e.target.value as TimeFilter })}
-              className="pl-10 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:ring-2 focus:ring-brand-600 outline-none"
+              onChange={(e) => {
+                const period = e.target.value as TimeFilter;
+                setAdminFilters({ ...adminFilters, period, customRange: undefined });
+                if (period !== 'custom') {
+                  setCustomStartDate('');
+                  setCustomEndDate('');
+                }
+              }}
+              className="pl-10 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 text-sm font-medium text-slate-900 dark:text-white shadow-sm hover:shadow"
             >
-              <option value="today">Hoje</option>
-              <option value="yesterday">Ontem</option>
-              <option value="weekly">Esta Semana</option>
-              <option value="monthly">Este Mês</option>
-              <option value="yearly">Este Ano</option>
-              <option value="custom">Personalizado</option>
-            </select>
-            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                <option value="today">Hoje</option>
+                <option value="yesterday">Ontem</option>
+                <option value="weekly">Esta Semana</option>
+                <option value="monthly">Este Mês</option>
+                <option value="yearly">Este Ano</option>
+                <option value="custom">Personalizado</option>
+              </select>
+              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+            </div>
+
+            {adminFilters.period === 'custom' && (
+              <>
+                <DatePicker
+                  value={customStartDate || formatDateForInput(getDateRange().start)}
+                  onChange={(selectedDate) => {
+                    setCustomStartDate(selectedDate);
+                    if (!customEndDate || selectedDate > customEndDate) {
+                      setCustomEndDate(selectedDate);
+                    }
+                  }}
+                  max={customEndDate || undefined}
+                  title="Data inicial"
+                  placeholder="Data inicial"
+                />
+                <span className="text-slate-400 dark:text-slate-500 font-medium text-sm">até</span>
+                <DatePicker
+                  value={customEndDate || formatDateForInput(getDateRange().end)}
+                  onChange={(selectedDate) => {
+                    setCustomEndDate(selectedDate);
+                    if (selectedDate < customStartDate) {
+                      setCustomStartDate(selectedDate);
+                    }
+                  }}
+                  min={customStartDate || undefined}
+                  title="Data final"
+                  placeholder="Data final"
+                />
+                {(customStartDate || customEndDate) && (
+                  <button
+                    onClick={() => {
+                      setCustomStartDate('');
+                      setCustomEndDate('');
+                    }}
+                    className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 shadow-sm hover:shadow"
+                    title="Limpar seleção"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </>
+            )}
           </div>
 
           <div className="relative">
             <select
               value={adminFilters.designerId}
               onChange={(e) => setAdminFilters({ ...adminFilters, designerId: e.target.value })}
-              className="pl-10 pr-8 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:ring-2 focus:ring-brand-600 outline-none"
+              className="pl-10 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 text-sm font-medium text-slate-900 dark:text-white shadow-sm hover:shadow"
             >
               <option value="all">Todos Designers</option>
               {designers.map(d => (
                 <option key={d.id} value={d.id}>{d.name}</option>
               ))}
             </select>
-            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
           </div>
         </div>
       </div>
 
+      {/* Exibir total de artes acima da tabela */}
+      {(viewMode === 'sessions' || viewMode === 'demands') && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Filter className="text-slate-500 dark:text-slate-400" size={18} />
+              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
+                Total de artes no período:
+              </span>
+            </div>
+            <span className="text-2xl font-bold text-brand-600 dark:text-brand-400">
+              {totalArts}
+            </span>
+          </div>
+        </div>
+      )}
+
       {viewMode === 'charts' ? (
         <HistoryCharts demands={demands} designers={designers} />
       ) : viewMode === 'sessions' ? (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="bg-slate-50 dark:bg-slate-800">
@@ -239,7 +353,7 @@ export const AdminHistory: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800 shadow-sm">
           {filteredDemands.length === 0 ? (
             <div className="p-12 text-center text-slate-500 dark:text-slate-400">
               Nenhuma demanda encontrada
@@ -278,3 +392,4 @@ export const AdminHistory: React.FC = () => {
     </div>
   );
 };
+
