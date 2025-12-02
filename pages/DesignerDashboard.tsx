@@ -206,7 +206,7 @@ export const DesignerDashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Card dinâmico de Performance do Dia */}
-        <div className={`rounded-2xl p-6 relative overflow-hidden transition-all duration-300 shadow-sm ${
+        <div className={`rounded-2xl p-4 sm:p-5 relative overflow-hidden transition-all duration-300 shadow-sm flex flex-col ${
           isDark 
             ? `${performanceStatus.colors.bgDark} border ${performanceStatus.colors.borderDark}` 
             : `bg-gradient-to-br ${
@@ -215,33 +215,47 @@ export const DesignerDashboard: React.FC = () => {
                 'from-[#280FFF] to-[#1F0BFF]'
               }`
         }`}>
-          <div className={`absolute top-0 right-0 w-32 h-32 rounded-full -mr-10 -mt-10 ${
+          <div className={`absolute top-0 right-0 w-24 h-24 rounded-full -mr-8 -mt-8 ${
             isDark ? 'bg-white/5' : 'bg-white/10'
           }`}></div>
-          <div className={`absolute bottom-0 left-0 w-24 h-24 rounded-full -ml-8 -mb-8 ${
+          <div className={`absolute bottom-0 left-0 w-16 h-16 rounded-full -ml-6 -mb-6 ${
             isDark ? 'bg-white/3' : 'bg-white/5'
           }`}></div>
           
-          <div className="relative">
-            <div className={`flex items-center gap-2 text-sm mb-4 ${
+          <div className="relative flex-1 flex flex-col">
+            <div className={`flex items-center gap-2 text-xs sm:text-sm mb-3 ${
               isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
             }`}>
-              {performanceStatus.status === 'success' ? <CheckCircle size={16} /> :
-               performanceStatus.status === 'warning' ? <AlertTriangle size={16} /> :
-               <Zap size={16} />}
+              {performanceStatus.status === 'success' ? <CheckCircle size={14} /> :
+               performanceStatus.status === 'warning' ? <AlertTriangle size={14} /> :
+               <Zap size={14} />}
               <span className="uppercase tracking-wider font-medium">Performance do Dia</span>
             </div>
             
-            <div className={`text-6xl font-bold mb-2 ${
-              isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
-            }`}>{totalPointsToday}</div>
-            <div className={`mb-6 ${
-              isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
-            }`}>Pontos totais</div>
+            <div className="flex items-baseline gap-2 mb-4">
+              <div className={`text-4xl sm:text-5xl lg:text-6xl font-bold ${
+                isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
+              } ${
+                totalArtsToday < dailyGoal 
+                  ? 'blur-md opacity-50 select-none pointer-events-none' 
+                  : ''
+              }`}>{totalPointsToday}</div>
+              <div className={`text-xs sm:text-sm ${
+                isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+              } ${
+                totalArtsToday < dailyGoal 
+                  ? 'blur-sm opacity-50' 
+                  : ''
+              }`}>Pontos totais</div>
+            </div>
             
-            <div className="flex gap-8">
+            <div className={`border-t ${
+              isDark ? 'border-white/10' : 'border-white/20'
+            } mb-4 pt-4`}></div>
+            
+            <div className="flex gap-6 sm:gap-8 lg:gap-10 mb-3">
               <div>
-                <div className={`text-3xl font-bold ${
+                <div className={`text-4xl sm:text-5xl lg:text-6xl font-bold ${
                   isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
                 }`}>{totalArtsToday}</div>
                 <div className={`text-sm uppercase ${
@@ -249,7 +263,7 @@ export const DesignerDashboard: React.FC = () => {
                 }`}>Artes</div>
               </div>
               <div>
-                <div className={`text-3xl font-bold ${
+                <div className={`text-4xl sm:text-5xl lg:text-6xl font-bold ${
                   isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
                 }`}>{todayDemands.length}</div>
                 <div className={`text-sm uppercase ${
@@ -258,25 +272,32 @@ export const DesignerDashboard: React.FC = () => {
               </div>
             </div>
             
-            <div className={`mt-6 flex items-center gap-3 rounded-xl p-3.5 backdrop-blur-sm ${
+            <div className={`mt-auto flex items-center gap-2 sm:gap-3 rounded-lg p-2.5 sm:p-3 backdrop-blur-sm ${
               isDark ? 'bg-white/10' : 'bg-white/20'
             }`}>
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center backdrop-blur-sm ${
+              <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center backdrop-blur-sm flex-shrink-0 ${
                 isDark ? 'bg-white/10' : 'bg-white/30'
               }`}>
-                <Target size={20} className={isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text} />
+                <Target size={16} className={isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text} />
               </div>
-              <div>
-                <div className={`font-semibold ${
+              <div className="flex-1 min-w-0">
+                <div className={`text-xs sm:text-sm font-semibold ${
                   isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
                 }`}>
                   Meta: {totalArtsToday}/{dailyGoal} artes ({performanceStatus.percentage}%)
                 </div>
-                <div className={`text-sm ${
+                <div className={`text-xs ${
                   isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
                 }`}>{performanceStatus.message}</div>
               </div>
             </div>
+            {totalArtsToday < dailyGoal && (
+              <div className={`mt-2.5 text-xs text-center ${
+                isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+              }`}>
+                Bata a meta do dia para visualizar a pontuação total.
+              </div>
+            )}
           </div>
         </div>
 
@@ -286,22 +307,28 @@ export const DesignerDashboard: React.FC = () => {
             <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Nova Demanda</h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
-                Tipo de Arte
-              </label>
-              <select
-                value={selectedArtType}
-                onChange={(e) => setSelectedArtType(e.target.value)}
-                className="w-full px-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-600 outline-none text-sm"
-              >
-                <option value="">Selecione...</option>
-                {artTypes.map(art => (
-                  <option key={art.id} value={art.id}>{art.label}</option>
-                ))}
-              </select>
+          <div className="mb-6">
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wide">
+              Tipo de Arte
+            </label>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+              {artTypes.map(art => (
+                <button
+                  key={art.id}
+                  onClick={() => setSelectedArtType(art.id)}
+                  className={`px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-medium text-center ${
+                    selectedArtType === art.id
+                      ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 shadow-sm'
+                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                  }`}
+                >
+                  {art.label}
+                </button>
+              ))}
             </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
 
             <div>
               <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
@@ -358,20 +385,17 @@ export const DesignerDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <span className="text-xs text-slate-500 dark:text-slate-400 uppercase">Subtotal</span>
-              <span className="ml-2 text-lg font-bold text-green-600">+{subtotal}</span>
+          {selectedArtType && (
+            <div className="flex items-center justify-end mb-4">
+              <button
+                onClick={handleAddItem}
+                className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-xl hover:border-brand-600 hover:text-brand-600 dark:hover:border-slate-400 dark:hover:text-slate-300 transition-all duration-200 hover:bg-brand-50 dark:hover:bg-brand-900/10"
+              >
+                <Plus size={18} />
+                Adicionar Item
+              </button>
             </div>
-            <button
-              onClick={handleAddItem}
-              disabled={!selectedArtType}
-              className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-xl hover:border-brand-600 hover:text-brand-600 dark:hover:border-slate-400 dark:hover:text-slate-300 disabled:opacity-50 transition-all duration-200 hover:bg-brand-50 dark:hover:bg-brand-900/10"
-            >
-              <Plus size={18} />
-              Adicionar Item
-            </button>
-          </div>
+          )}
 
           {items.length > 0 ? (
             <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden shadow-sm">
@@ -386,19 +410,12 @@ export const DesignerDashboard: React.FC = () => {
                     ) : null}
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="font-semibold text-green-600">+{item.totalPoints}</span>
                     <button onClick={() => handleRemoveItem(idx)} className="text-red-400 hover:text-red-600">
                       <Trash2 size={16} />
                     </button>
                   </div>
                 </div>
               ))}
-              <div className="p-4 bg-brand-600 flex items-center justify-between shadow-sm">
-                <span className="text-white font-medium">Total da Demanda</span>
-                <span className="text-white font-bold text-lg">
-                  {items.reduce((acc, i) => acc + i.totalPoints, 0)} pts
-                </span>
-              </div>
               <button
                 onClick={handleSubmit}
                 className="w-full py-3.5 bg-brand-700 hover:bg-brand-800 text-white font-semibold transition-all duration-200 hover:shadow-lg hover:shadow-brand-700/30"
@@ -406,16 +423,7 @@ export const DesignerDashboard: React.FC = () => {
                 Registrar Demanda
               </button>
             </div>
-          ) : (
-            <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-8 text-center">
-              <div className="w-12 h-12 bg-slate-100 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3">
-                <ClipboardList className="text-slate-400" size={24} />
-              </div>
-              <p className="text-slate-500 dark:text-slate-400">
-                Adicione itens para montar a demanda
-              </p>
-            </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -437,7 +445,6 @@ export const DesignerDashboard: React.FC = () => {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Horário</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Descrição</th>
                 <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Artes</th>
-                <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pontos</th>
                 <th className="text-center px-6 py-3 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Ação</th>
               </tr>
             </thead>
@@ -449,7 +456,6 @@ export const DesignerDashboard: React.FC = () => {
                     <Clock size={16} />
                     Início do Trabalho
                   </td>
-                  <td className="px-6 py-4 text-center">-</td>
                   <td className="px-6 py-4 text-center">-</td>
                   <td className="px-6 py-4 text-center">-</td>
                 </tr>
@@ -484,9 +490,6 @@ export const DesignerDashboard: React.FC = () => {
                     {demand.totalQuantity}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <span className="font-bold text-green-600">+{demand.totalPoints}</span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
                     <button 
                       onClick={() => deleteDemand(demand.id)}
                       className="text-slate-400 hover:text-red-500 transition-colors"
@@ -498,7 +501,7 @@ export const DesignerDashboard: React.FC = () => {
               ))}
               {todayDemands.length === 0 && !todaySession && (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-slate-500 dark:text-slate-400">
+                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500 dark:text-slate-400">
                     Nenhuma demanda registrada hoje
                   </td>
                 </tr>
