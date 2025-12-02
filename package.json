@@ -4,11 +4,16 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "tsx api/index.ts",
-    "client": "wait-on tcp:3001 && vite",
+    "dev": "concurrently \"npm run server\" \"wait-on tcp:3001 && npm run client\"",
+    "server": "tsx --watch api/index.ts",
+    "server:once": "tsx api/index.ts",
+    "client": "vite",
+    "client:force": "vite --force",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "restart:server": "node scripts/restart-server.js",
+    "restart:client": "node scripts/restart-client.js",
+    "check:dev": "node scripts/check-dev.js"
   },
   "dependencies": {
     "@types/cors": "^2.8.19",

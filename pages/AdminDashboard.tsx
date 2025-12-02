@@ -108,35 +108,68 @@ export const AdminDashboard: React.FC = () => {
   };
 
   const getDateRange = (): { start: number; end: number } => {
+    // SEMPRE usar timezone local do Brasil (America/Sao_Paulo, UTC-3)
+    // new Date() já retorna no timezone local do sistema
     const now = new Date();
+    
+    // Criar data de hoje normalizada para início do dia (00:00:00) no timezone local
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    today.setHours(0, 0, 0, 0);
+    
+    // Criar data de hoje normalizada para fim do dia (23:59:59.999) no timezone local
     const todayEnd = new Date(today);
     todayEnd.setHours(23, 59, 59, 999);
     
     switch (dateFilter) {
-      case 'hoje':
+      case 'hoje': {
+        // FILTRO "HOJE": retorna exatamente o dia atual local
+        // Exemplo: se hoje for 02/12/2025, retorna 02/12/2025 00:00:00 até 02/12/2025 23:59:59
         return { start: today.getTime(), end: todayEnd.getTime() };
+      }
       case 'semana': {
+        // FILTRO "SEMANA": calcula semana de DOMINGO a SÁBADO usando timezone local
+        // getDay() retorna: 0=Domingo, 1=Segunda, 2=Terça, 3=Quarta, 4=Quinta, 5=Sexta, 6=Sábado
         const dayOfWeek = today.getDay();
-        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        
+        // Calcular quantos dias subtrair para chegar ao domingo da semana atual
+        // Se hoje é domingo (0), não subtrai nada
+        // Se hoje é segunda (1), subtrai 1 dia
+        // Se hoje é sábado (6), subtrai 6 dias
+        const daysToSubtract = dayOfWeek;
+        
+        // Início da semana = domingo (00:00:00)
         const weekStart = new Date(today);
-        weekStart.setDate(weekStart.getDate() - diff);
+        weekStart.setDate(weekStart.getDate() - daysToSubtract);
+        weekStart.setHours(0, 0, 0, 0);
+        
+        // Fim da semana = sábado (23:59:59.999) - 6 dias após o domingo
         const weekEnd = new Date(weekStart);
         weekEnd.setDate(weekEnd.getDate() + 6);
         weekEnd.setHours(23, 59, 59, 999);
+        
         return { start: weekStart.getTime(), end: weekEnd.getTime() };
       }
       case 'mes': {
+        // FILTRO "MÊS": primeiro e último dia do mês atual no timezone local
+        // new Date(year, month, 1) = primeiro dia do mês
+        // new Date(year, month + 1, 0) = último dia do mês (dia 0 do próximo mês = último dia do mês atual)
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        monthStart.setHours(0, 0, 0, 0);
+        
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         monthEnd.setHours(23, 59, 59, 999);
+        
         return { start: monthStart.getTime(), end: monthEnd.getTime() };
       }
       case 'custom': {
         if (customStartDate && customEndDate) {
-          const start = new Date(customStartDate);
+          // Parse da string YYYY-MM-DD no timezone local
+          const [startYear, startMonth, startDay] = customStartDate.split('-').map(Number);
+          const start = new Date(startYear, startMonth - 1, startDay);
           start.setHours(0, 0, 0, 0);
-          const endDate = new Date(customEndDate);
+          
+          const [endYear, endMonth, endDay] = customEndDate.split('-').map(Number);
+          const endDate = new Date(endYear, endMonth - 1, endDay);
           endDate.setHours(23, 59, 59, 999);
           
           // Se as datas são iguais, retornar apenas um dia
@@ -148,16 +181,18 @@ export const AdminDashboard: React.FC = () => {
         }
         // Se apenas uma data foi selecionada, usar como início e fim
         if (customStartDate) {
-          const start = new Date(customStartDate);
+          const [year, month, day] = customStartDate.split('-').map(Number);
+          const start = new Date(year, month - 1, day);
           start.setHours(0, 0, 0, 0);
-          const end = new Date(customStartDate);
+          const end = new Date(year, month - 1, day);
           end.setHours(23, 59, 59, 999);
           return { start: start.getTime(), end: end.getTime() };
         }
         if (customEndDate) {
-          const start = new Date(customEndDate);
+          const [year, month, day] = customEndDate.split('-').map(Number);
+          const start = new Date(year, month - 1, day);
           start.setHours(0, 0, 0, 0);
-          const end = new Date(customEndDate);
+          const end = new Date(year, month - 1, day);
           end.setHours(23, 59, 59, 999);
           return { start: start.getTime(), end: end.getTime() };
         }
@@ -344,13 +379,8 @@ export const AdminDashboard: React.FC = () => {
                   value={customStartDate || formatDateForInput(start)}
                   onChange={(selectedDate) => {
                     setCustomStartDate(selectedDate);
-                    // Se não há data final ou a data inicial é maior que a final, ajustar a data final
-                    if (!customEndDate || selectedDate > customEndDate) {
-                      setCustomEndDate(selectedDate);
-                    }
                     setDateFilter('custom');
                   }}
-                  max={customEndDate || undefined}
                   title="Data inicial"
                   placeholder="Data inicial"
                 />
@@ -359,13 +389,8 @@ export const AdminDashboard: React.FC = () => {
                   value={customEndDate || formatDateForInput(end)}
                   onChange={(selectedDate) => {
                     setCustomEndDate(selectedDate);
-                    // Se a data final é menor que a inicial, ajustar a data inicial
-                    if (selectedDate < customStartDate) {
-                      setCustomStartDate(selectedDate);
-                    }
                     setDateFilter('custom');
                   }}
-                  min={customStartDate || undefined}
                   title="Data final"
                   placeholder="Data final"
                 />
@@ -651,9 +676,13 @@ export const AdminDashboard: React.FC = () => {
 };
 
 function formatDateForInput(timestamp: number): string {
+  // Formatar timestamp para string YYYY-MM-DD usando timezone local
+  // IMPORTANTE: new Date(timestamp) já interpreta o timestamp no timezone local
+  // getDate(), getMonth(), getFullYear() retornam valores no timezone local
+  // NÃO usar getUTCDate(), getUTCMonth(), getUTCFullYear() para evitar deslocamento de -1 dia
   const date = new Date(timestamp);
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0'); // getMonth() retorna 0-11, então +1
+  const day = String(date.getDate()).padStart(2, '0'); // getDate() retorna 1-31 no timezone local
   return `${year}-${month}-${day}`;
 }

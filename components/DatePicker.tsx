@@ -50,14 +50,20 @@ export const DatePicker: React.FC<DatePickerProps> = ({
   // Inicializar mês atual com base na data selecionada
   useEffect(() => {
     if (value) {
-      const date = new Date(value);
+      // Parse manual para evitar problemas de timezone
+      const [year, month, day] = value.split('-').map(Number);
+      const date = new Date(year, month - 1, day);
       setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
     }
   }, [value]);
 
   const formatDisplayDate = (dateString: string): string => {
     if (!dateString) return placeholder;
-    const date = new Date(dateString);
+    // IMPORTANTE: Parse manual da string YYYY-MM-DD para evitar problemas de timezone
+    // new Date("2025-12-02") interpreta como UTC, causando deslocamento de -1 dia no Brasil (UTC-3)
+    // Solução: fazer parse manual e criar data no timezone local
+    const [year, month, day] = dateString.split('-').map(Number);
+    const date = new Date(year, month - 1, day); // month - 1 porque getMonth() retorna 0-11
     return date.toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -226,7 +232,6 @@ export const DatePicker: React.FC<DatePickerProps> = ({
               const selected = isDateSelected(date);
               const today = isToday(date);
               const currentMonthDay = isCurrentMonth(date);
-              const isSunday = date.getDay() === 0;
 
               return (
                 <button
@@ -242,9 +247,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
                       : today
                       ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-slate-300 hover:bg-brand-100 dark:hover:bg-brand-900/40'
                       : currentMonthDay
-                      ? isSunday
-                        ? 'text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 opacity-60'
-                        : 'text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
+                      ? 'text-slate-900 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700'
                       : 'text-slate-400 dark:text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 opacity-50'
                     }
                   `}
