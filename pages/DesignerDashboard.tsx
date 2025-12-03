@@ -292,7 +292,7 @@ export const DesignerDashboard: React.FC = () => {
               </div>
             </div>
             {totalArtsToday < dailyGoal && (
-              <div className={`mt-2.5 text-xs text-center ${
+              <div className={`mt-2.5 text-xs text-left ${
                 isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
               }`}>
                 Bata a meta do dia para visualizar a pontuação total.

@@ -164,6 +164,81 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   }, [currentUser]);
 
+  // Monitorar desconexão automática
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const checkAutoLogout = () => {
+      const loginTimestamp = localStorage.getItem('loginTimestamp');
+      const loginDate = localStorage.getItem('loginDate');
+      const currentDate = new Date().toDateString();
+
+      if (!loginTimestamp || !loginDate) {
+        // Se não tem timestamp, fazer logout por segurança
+        setCurrentUser(null);
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('loginTimestamp');
+        localStorage.removeItem('loginDate');
+        return;
+      }
+
+      // Verificar se mudou o dia (desconectar todos)
+      if (loginDate !== currentDate) {
+        setCurrentUser(null);
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('loginTimestamp');
+        localStorage.removeItem('loginDate');
+        return;
+      }
+
+      // Verificar se passou 6 horas para designers
+      if (currentUser.role === 'DESIGNER') {
+        const loginTime = parseInt(loginTimestamp, 10);
+        const currentTime = Date.now();
+        const hoursConnected = (currentTime - loginTime) / (1000 * 60 * 60); // Converter para horas
+
+        if (hoursConnected >= 6) {
+          setCurrentUser(null);
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('loginTimestamp');
+          localStorage.removeItem('loginDate');
+          return;
+        }
+      }
+    };
+
+    // Verificar imediatamente ao montar
+    checkAutoLogout();
+
+    // Verificar a cada minuto
+    const interval = setInterval(checkAutoLogout, 60000); // 60000ms = 1 minuto
+
+    // Verificar quando a página ganha foco (usuário volta à aba)
+    const handleFocus = () => {
+      checkAutoLogout();
+    };
+    window.addEventListener('focus', handleFocus);
+
+    // Verificar mudança de data (meia-noite)
+    const checkDateChange = () => {
+      const currentDate = new Date().toDateString();
+      const savedDate = localStorage.getItem('loginDate');
+      if (savedDate && savedDate !== currentDate) {
+        setCurrentUser(null);
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('loginTimestamp');
+        localStorage.removeItem('loginDate');
+      }
+    };
+    const dateCheckInterval = setInterval(checkDateChange, 60000); // Verificar a cada minuto
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(dateCheckInterval);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, [currentUser]);
+
   const login = async (name: string, password: string): Promise<boolean> => {
     try {
       const res = await fetch(`${API_URL}/api/auth/login`, {
@@ -175,6 +250,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const user = await res.json();
       setCurrentUser(user);
       localStorage.setItem('currentUser', JSON.stringify(user));
+      
+      // Salvar timestamp do login e data do dia
+      const loginTimestamp = Date.now();
+      const loginDate = new Date().toDateString();
+      localStorage.setItem('loginTimestamp', loginTimestamp.toString());
+      localStorage.setItem('loginDate', loginDate);
       
       if (user.role === 'DESIGNER') {
         try {
@@ -206,6 +287,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const logout = () => {
     setCurrentUser(null);
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('loginTimestamp');
+    localStorage.removeItem('loginDate');
   };
 
   const addDemand = async (demand: Omit<Demand, 'id' | 'timestamp'>) => {
