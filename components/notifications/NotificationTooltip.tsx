@@ -38,7 +38,7 @@ export const NotificationTooltip: React.FC<NotificationTooltipProps> = ({ notifi
   const styles = getTypeStyles(notification.type);
 
   return (
-    <div className={`absolute right-0 top-full mt-2 w-80 p-4 ${styles.bg} rounded-lg shadow-xl border ${styles.border} opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50`}>
+    <div className={`absolute right-0 top-full mt-2 w-80 p-4 ${styles.bg} rounded-lg shadow-xl border ${styles.border} opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none group-hover:pointer-events-auto`}>
       {notification.h1 && (
         <h3 className={`text-lg font-semibold mb-2 ${styles.h1}`}>
           {notification.h1}

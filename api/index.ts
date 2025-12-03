@@ -1352,6 +1352,341 @@ app.delete('/api/tags/:id', async (req: Request, res: Response) => {
   }
 });
 
+// ============ DESIGNER NOTIFICATIONS ============
+app.get('/api/designer-notifications', async (req: Request, res: Response) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        dn.*,
+        u.name as designer_name
+      FROM designer_notifications dn
+      LEFT JOIN users u ON dn.designer_id = u.id
+      ORDER BY dn.created_at DESC
+    `);
+    return res.json(result.rows.map(row => {
+      // Converter created_at e updated_at para número (timestamp ou bigint)
+      let createdAt = row.created_at;
+      let updatedAt = row.updated_at;
+      
+      if (createdAt instanceof Date) {
+        createdAt = createdAt.getTime();
+      } else if (typeof createdAt === 'string') {
+        createdAt = new Date(createdAt).getTime();
+      } else if (typeof createdAt === 'number') {
+        // Já é número
+      } else {
+        createdAt = Date.now();
+      }
+      
+      if (updatedAt instanceof Date) {
+        updatedAt = updatedAt.getTime();
+      } else if (typeof updatedAt === 'string') {
+        updatedAt = new Date(updatedAt).getTime();
+      } else if (typeof updatedAt === 'number') {
+        // Já é número
+      } else {
+        updatedAt = Date.now();
+      }
+      
+      // Verificar se enabled existe ou se é 'active'
+      const enabled = row.enabled !== undefined ? row.enabled : (row.active !== undefined ? row.active : true);
+      
+      return {
+        id: String(row.id),
+        designerId: String(row.designer_id),
+        designerName: row.designer_name,
+        type: row.type,
+        h1: row.h1,
+        h2: row.h2,
+        h3: row.h3,
+        enabled: enabled,
+        createdAt: Number(createdAt),
+        updatedAt: Number(updatedAt)
+      };
+    }));
+  } catch (error) {
+    console.error('Erro ao buscar notificações:', error);
+    return res.status(500).json({ error: 'Erro ao buscar notificações' });
+  }
+});
+
+app.get('/api/designer-notifications/designer/:designerId', async (req: Request, res: Response) => {
+  try {
+    const { designerId } = req.params;
+    const result = await pool.query(
+      'SELECT * FROM designer_notifications WHERE designer_id = $1 AND enabled = true ORDER BY created_at DESC LIMIT 1',
+      [designerId]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notificação não encontrada' });
+    }
+    const row = result.rows[0];
+    return res.json({
+      id: row.id,
+      designerId: row.designer_id,
+      type: row.type,
+      h1: row.h1,
+      h2: row.h2,
+      h3: row.h3,
+      enabled: row.enabled,
+      createdAt: parseInt(row.created_at),
+      updatedAt: parseInt(row.updated_at)
+    });
+  } catch (error) {
+    console.error('Erro ao buscar notificação do designer:', error);
+    return res.status(500).json({ error: 'Erro ao buscar notificação' });
+  }
+});
+
+app.post('/api/designer-notifications', async (req: Request, res: Response) => {
+  try {
+    const { designerId, type, h1, h2, h3, enabled } = req.body;
+    
+    console.log('📝 Recebendo requisição para criar notificação:', { designerId, type, h1, h2, h3, enabled });
+    
+    // Validações
+    if (!designerId) {
+      console.error('❌ designerId não fornecido');
+      return res.status(400).json({ error: 'designerId é obrigatório' });
+    }
+    if (!type) {
+      console.error('❌ type não fornecido');
+      return res.status(400).json({ error: 'type é obrigatório' });
+    }
+    if (!['common', 'important', 'urgent'].includes(type)) {
+      console.error('❌ type inválido:', type);
+      return res.status(400).json({ error: 'type deve ser: common, important ou urgent' });
+    }
+    
+    // Verificar se o designer existe
+    const designerCheck = await pool.query('SELECT id FROM users WHERE id = $1', [designerId]);
+    if (designerCheck.rows.length === 0) {
+      console.error('❌ Designer não encontrado:', designerId);
+      return res.status(404).json({ error: 'Designer não encontrado' });
+    }
+    console.log('✅ Designer encontrado:', designerCheck.rows[0].id);
+    
+    // Verificar se pelo menos um campo de conteúdo está preenchido
+    if (!h1?.trim() && !h2?.trim() && !h3?.trim()) {
+      console.error('❌ Nenhum campo de conteúdo preenchido');
+      return res.status(400).json({ error: 'Preencha pelo menos um campo (H1, H2 ou H3)' });
+    }
+    
+    const id = `notification-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
+    
+    console.log('💾 Inserindo notificação no banco...');
+    console.log('📋 Valores:', { id, designerId, type, h1: h1?.trim() || null, h2: h2?.trim() || null, h3: h3?.trim() || null, enabled: enabled !== false, now });
+    
+    try {
+      // Verificar estrutura da tabela para saber se created_at/updated_at são timestamp ou bigint
+      const tableInfo = await pool.query(`
+        SELECT data_type 
+        FROM information_schema.columns 
+        WHERE table_name = 'designer_notifications' 
+        AND column_name = 'created_at'
+      `);
+      
+      const isTimestamp = tableInfo.rows.length > 0 && 
+                         (tableInfo.rows[0].data_type === 'timestamp without time zone' || 
+                          tableInfo.rows[0].data_type === 'timestamp with time zone');
+      
+      let createdAtValue, updatedAtValue;
+      
+      if (isTimestamp) {
+        // Se for timestamp, converter número para Date
+        createdAtValue = new Date(now);
+        updatedAtValue = new Date(now);
+      } else {
+        // Se for bigint, usar número diretamente
+        createdAtValue = now;
+        updatedAtValue = now;
+      }
+      
+      // Verificar se a coluna é 'enabled' ou 'active'
+      const enabledColumnInfo = await pool.query(`
+        SELECT column_name 
+        FROM information_schema.columns 
+        WHERE table_name = 'designer_notifications' 
+        AND (column_name = 'enabled' OR column_name = 'active')
+        LIMIT 1
+      `);
+      
+      const enabledColumnName = enabledColumnInfo.rows.length > 0 
+        ? enabledColumnInfo.rows[0].column_name 
+        : 'enabled';
+      
+      // Construir query de forma segura
+      const columnName = enabledColumnName === 'active' ? 'active' : 'enabled';
+      await pool.query(
+        `INSERT INTO designer_notifications (id, designer_id, type, h1, h2, h3, ${columnName}, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+        [id, designerId, type, h1?.trim() || null, h2?.trim() || null, h3?.trim() || null, enabled !== false, createdAtValue, updatedAtValue]
+      );
+    } catch (insertError: any) {
+      console.error('❌ Erro ao inserir no banco:', insertError);
+      console.error('❌ Código do erro:', insertError?.code);
+      console.error('❌ Mensagem:', insertError?.message);
+      console.error('❌ Detalhes:', insertError?.detail);
+      throw insertError;
+    }
+    console.log('✅ Notificação inserida com sucesso, ID:', id);
+    
+    const result = await pool.query('SELECT * FROM designer_notifications WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      console.error('❌ Notificação criada mas não encontrada após inserção');
+      return res.status(500).json({ error: 'Notificação criada mas não foi possível recuperá-la' });
+    }
+    
+    const row = result.rows[0];
+    
+    // Converter created_at e updated_at para número
+    let createdAt = row.created_at;
+    let updatedAt = row.updated_at;
+    
+    if (createdAt instanceof Date) {
+      createdAt = createdAt.getTime();
+    } else if (typeof createdAt === 'string') {
+      createdAt = new Date(createdAt).getTime();
+    } else if (typeof createdAt === 'number') {
+      // Já é número
+    } else {
+      createdAt = Date.now();
+    }
+    
+    if (updatedAt instanceof Date) {
+      updatedAt = updatedAt.getTime();
+    } else if (typeof updatedAt === 'string') {
+      updatedAt = new Date(updatedAt).getTime();
+    } else if (typeof updatedAt === 'number') {
+      // Já é número
+    } else {
+      updatedAt = Date.now();
+    }
+    
+    const notificationEnabled = row.enabled !== undefined ? row.enabled : (row.active !== undefined ? row.active : true);
+    
+    console.log('✅ Notificação criada com sucesso:', row.id);
+    return res.json({
+      id: String(row.id),
+      designerId: String(row.designer_id),
+      type: row.type,
+      h1: row.h1,
+      h2: row.h2,
+      h3: row.h3,
+      enabled: notificationEnabled,
+      createdAt: Number(createdAt),
+      updatedAt: Number(updatedAt)
+    });
+  } catch (error: any) {
+    console.error('Erro ao criar notificação:', error);
+    
+    // Verificar se é erro de tabela não encontrada
+    if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+      return res.status(500).json({ 
+        error: 'Tabela designer_notifications não encontrada. Execute o script SQL create_designer_notifications_table.sql no banco de dados.',
+        details: error?.message 
+      });
+    }
+    
+    // Verificar se é erro de foreign key
+    if (error?.code === '23503') {
+      return res.status(400).json({ 
+        error: 'Designer não encontrado ou inválido',
+        details: error?.message 
+      });
+    }
+    
+    // Verificar se é erro de constraint
+    if (error?.code === '23514') {
+      return res.status(400).json({ 
+        error: 'Tipo de notificação inválido. Use: common, important ou urgent',
+        details: error?.message 
+      });
+    }
+    
+    return res.status(500).json({ 
+      error: 'Erro ao criar notificação', 
+      details: error?.message || error?.toString() 
+    });
+  }
+});
+
+app.put('/api/designer-notifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { type, h1, h2, h3, enabled } = req.body;
+    const now = Date.now();
+    await pool.query(
+      `UPDATE designer_notifications 
+       SET type = $1, h1 = $2, h2 = $3, h3 = $4, enabled = $5, updated_at = $6
+       WHERE id = $7`,
+      [type, h1 || null, h2 || null, h3 || null, enabled !== false, now, id]
+    );
+    const result = await pool.query('SELECT * FROM designer_notifications WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notificação não encontrada' });
+    }
+    const row = result.rows[0];
+    return res.json({
+      id: row.id,
+      designerId: row.designer_id,
+      type: row.type,
+      h1: row.h1,
+      h2: row.h2,
+      h3: row.h3,
+      enabled: row.enabled,
+      createdAt: parseInt(row.created_at),
+      updatedAt: parseInt(row.updated_at)
+    });
+  } catch (error: any) {
+    console.error('Erro ao atualizar notificação:', error);
+    return res.status(500).json({ error: 'Erro ao atualizar notificação', details: error?.message });
+  }
+});
+
+app.patch('/api/designer-notifications/:id/toggle', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { enabled } = req.body;
+    const now = Date.now();
+    await pool.query(
+      'UPDATE designer_notifications SET enabled = $1, updated_at = $2 WHERE id = $3',
+      [enabled, now, id]
+    );
+    const result = await pool.query('SELECT * FROM designer_notifications WHERE id = $1', [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Notificação não encontrada' });
+    }
+    const row = result.rows[0];
+    return res.json({
+      id: row.id,
+      designerId: row.designer_id,
+      type: row.type,
+      h1: row.h1,
+      h2: row.h2,
+      h3: row.h3,
+      enabled: row.enabled,
+      createdAt: parseInt(row.created_at),
+      updatedAt: parseInt(row.updated_at)
+    });
+  } catch (error: any) {
+    console.error('Erro ao alterar status da notificação:', error);
+    return res.status(500).json({ error: 'Erro ao alterar status', details: error?.message });
+  }
+});
+
+app.delete('/api/designer-notifications/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    await pool.query('DELETE FROM designer_notifications WHERE id = $1', [id]);
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('Erro ao deletar notificação:', error);
+    return res.status(500).json({ error: 'Erro ao deletar notificação', details: error?.message });
+  }
+});
+
 // ============ HEALTH CHECK ============
 app.get('/api/health', (req: Request, res: Response) => {
   return res.json({ status: 'ok', timestamp: Date.now() });

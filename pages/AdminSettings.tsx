@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Settings, Users, Palette, Image, Save, Plus, X, Edit2, Trash2, GripVertical, Lock, CheckCircle, AlertCircle } from 'lucide-react';
+import { Settings, Users, Palette, Image, Save, Plus, X, Edit2, Trash2, GripVertical, Lock, CheckCircle, AlertCircle, Bell } from 'lucide-react';
 import { autoFocus } from '../utils/autoFocus';
+import { DesignerNotificationPanel } from '../components/admin/DesignerNotificationPanel';
 
 const PRESET_COLORS = [
   '#4F46E5', '#8b5cf6', '#06b6d4', '#ec4899', '#f59e0b', '#10b981', 
@@ -16,7 +17,7 @@ export const AdminSettings: React.FC = () => {
     currentUser
   } = useApp();
   
-  const [activeTab, setActiveTab] = useState<'brand' | 'team' | 'artTypes' | 'security'>('brand');
+  const [activeTab, setActiveTab] = useState<'brand' | 'team' | 'artTypes' | 'security' | 'notifications'>('brand');
   const [saving, setSaving] = useState(false);
   
   const [oldPassword, setOldPassword] = useState('');
@@ -365,6 +366,7 @@ export const AdminSettings: React.FC = () => {
     { id: 'brand', label: 'Marca', icon: Image },
     { id: 'team', label: 'Equipe', icon: Users },
     { id: 'artTypes', label: 'Tipos de Arte', icon: Palette },
+    { id: 'notifications', label: 'Notificações', icon: Bell },
     { id: 'security', label: 'Segurança', icon: Lock },
   ];
 
@@ -643,6 +645,12 @@ export const AdminSettings: React.FC = () => {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {activeTab === 'notifications' && (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
+          <DesignerNotificationPanel designers={designers} />
         </div>
       )}
 

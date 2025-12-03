@@ -39,10 +39,13 @@ export const NotificationProvider: React.FC<{ children: ReactNode }> = ({ childr
     setError(null);
     try {
       const data = await notificationService.getAllNotifications();
-      setNotifications(data);
+      setNotifications(data || []);
     } catch (err) {
-      setError(err instanceof Error ? err : new Error('Erro desconhecido'));
+      const error = err instanceof Error ? err : new Error('Erro desconhecido');
+      setError(error);
       console.error('Erro ao buscar notificações:', err);
+      // Garantir que mesmo com erro, o loading seja desativado
+      setNotifications([]);
     } finally {
       setLoading(false);
     }

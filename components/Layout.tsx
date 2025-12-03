@@ -18,6 +18,8 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { NotificationBadge } from './notifications/NotificationBadge';
+import { useNotification } from '../hooks/useNotification';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -28,6 +30,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = React.useState(false);
+  
+  // Buscar notificação apenas para designers
+  const { notification } = useNotification(currentUser?.role === 'DESIGNER' ? currentUser?.id : undefined);
   
   // Estado para sidebar colapsada (apenas desktop)
   const [sidebarCollapsed, setSidebarCollapsed] = React.useState(() => {
@@ -293,7 +298,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       <main className={`flex-1 p-4 lg:p-6 xl:p-8 overflow-auto bg-slate-50 dark:bg-slate-950 transition-all duration-300 ${
         sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'
       }`}>
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-7xl mx-auto relative">
+          {/* Notification Badge - Lado direito do layout (apenas para designers) */}
+          {!isAdmin && notification && (
+            <div className="absolute top-0 right-0 z-10">
+              <NotificationBadge notification={notification} />
+            </div>
+          )}
           {children}
         </div>
       </main>

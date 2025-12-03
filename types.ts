@@ -160,3 +160,19 @@ export interface DailyPerformanceResult {
     accentDark: string;
   };
 }
+
+// Notification types
+export type NotificationType = 'common' | 'important' | 'urgent';
+
+export interface DesignerNotification {
+  id: string;
+  designerId: string;
+  designerName?: string;
+  type: NotificationType;
+  h1?: string;
+  h2?: string;
+  h3?: string;
+  enabled: boolean;
+  createdAt: number;
+  updatedAt: number;
+}

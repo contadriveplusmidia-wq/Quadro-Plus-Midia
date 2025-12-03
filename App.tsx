@@ -2,6 +2,7 @@
 import React from 'react';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider, useApp } from './context/AppContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { Login } from './pages/Login';
 import { Layout } from './components/Layout';
 import { DesignerDashboard } from './pages/DesignerDashboard';
@@ -111,9 +112,11 @@ const AppRoutes = () => {
 export default function App() {
   return (
     <AppProvider>
-      <HashRouter>
-        <AppRoutes />
-      </HashRouter>
+      <NotificationProvider>
+        <HashRouter>
+          <AppRoutes />
+        </HashRouter>
+      </NotificationProvider>
     </AppProvider>
   );
 }

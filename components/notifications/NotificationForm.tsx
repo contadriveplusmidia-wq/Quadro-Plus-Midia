@@ -76,7 +76,19 @@ export const NotificationForm: React.FC<NotificationFormProps> = ({
       onClose();
     } catch (err: any) {
       console.error('Erro ao salvar notificação:', err);
-      const errorMessage = err?.message || err?.error || 'Erro ao salvar notificação';
+      let errorMessage = 'Erro ao salvar notificação';
+      
+      if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.error) {
+        errorMessage = err.error;
+        if (err?.details) {
+          errorMessage += `: ${err.details}`;
+        }
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
+      
       setError(errorMessage);
     }
   };

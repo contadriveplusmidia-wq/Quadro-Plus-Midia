@@ -13,6 +13,7 @@ export const DesignerNotificationPanel: React.FC<DesignerNotificationPanelProps>
   const {
     notifications,
     loading,
+    error,
     fetchNotifications,
     createNotification,
     updateNotification,
@@ -26,8 +27,22 @@ export const DesignerNotificationPanel: React.FC<DesignerNotificationPanelProps>
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    let mounted = true;
+    const loadNotifications = async () => {
+      try {
+        await fetchNotifications();
+      } catch (error) {
+        console.error('Erro ao carregar notificações:', error);
+        // Não fazer nada, o contexto já trata o erro
+      }
+    };
+    
+    loadNotifications();
+    
+    return () => {
+      mounted = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCreate = () => {
     setSelectedDesigner(null);
@@ -118,19 +133,33 @@ export const DesignerNotificationPanel: React.FC<DesignerNotificationPanelProps>
         </button>
       </div>
 
-      {loading && (
-        <div className="text-center py-8 text-slate-500 dark:text-slate-400">
-          Carregando notificações...
+      {error && (
+        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-red-600 dark:text-red-400 text-sm mb-4">
+          <p className="font-medium mb-1">Erro ao carregar notificações</p>
+          <p className="text-xs">{error.message || 'Erro desconhecido'}</p>
+          <button
+            onClick={() => fetchNotifications()}
+            className="mt-2 text-xs underline hover:no-underline"
+          >
+            Tentar novamente
+          </button>
         </div>
       )}
 
-      {!loading && notificationsByDesigner.length === 0 && (
+      {loading ? (
+        <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-brand-600 mb-2"></div>
+          <p>Carregando notificações...</p>
+        </div>
+      ) : designers.length === 0 ? (
         <div className="text-center py-8 text-slate-500 dark:text-slate-400">
           Nenhum designer encontrado
         </div>
-      )}
-
-      {!loading && notificationsByDesigner.length > 0 && (
+      ) : notificationsByDesigner.length === 0 ? (
+        <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+          Nenhuma notificação cadastrada. Clique em "Nova Notificação" para criar uma.
+        </div>
+      ) : (
         <div className="space-y-4">
           {notificationsByDesigner.map(({ designer, notification }) => (
             <div key={designer.id}>

@@ -16,6 +16,7 @@ const getTypeConfig = (type: NotificationType) => {
         text: 'text-slate-600 dark:text-slate-400',
         hover: 'hover:bg-slate-200 dark:hover:bg-slate-700',
         animate: '',
+        ring: '',
       };
     case 'important':
       return {
@@ -24,6 +25,7 @@ const getTypeConfig = (type: NotificationType) => {
         text: 'text-yellow-600 dark:text-yellow-400',
         hover: 'hover:bg-yellow-200 dark:hover:bg-yellow-900/30',
         animate: 'animate-pulse',
+        ring: 'ring-2 ring-yellow-400 ring-opacity-75',
       };
     case 'urgent':
       return {
@@ -31,7 +33,8 @@ const getTypeConfig = (type: NotificationType) => {
         bg: 'bg-red-100 dark:bg-red-900/20',
         text: 'text-red-600 dark:text-red-400',
         hover: 'hover:bg-red-200 dark:hover:bg-red-900/30',
-        animate: 'animate-pulse',
+        animate: 'animate-bounce',
+        ring: 'ring-2 ring-red-500 ring-opacity-75 animate-ping',
       };
   }
 };
@@ -48,12 +51,12 @@ export const NotificationBadge: React.FC<NotificationBadgeProps> = ({ notificati
   return (
     <div className="relative group">
       <button
-        className={`relative p-2.5 rounded-full ${config.bg} ${config.text} ${config.hover} transition-colors`}
+        className={`relative p-2.5 rounded-full ${config.bg} ${config.text} ${config.hover} ${config.ring} transition-all duration-300`}
         aria-label="Notificação"
       >
         <Icon size={20} className={config.animate} />
         {hasContent && (
-          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+          <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
         )}
       </button>
       
