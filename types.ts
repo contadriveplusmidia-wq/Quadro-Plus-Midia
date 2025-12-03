@@ -66,6 +66,8 @@ export interface Feedback {
   createdAt: number;
   viewed: boolean;
   viewedAt?: number;
+  response?: string; // Resposta do designer
+  responseAt?: number; // Timestamp da resposta
 }
 
 export interface Lesson {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, X, Trash2, MessageSquare, Eye, EyeOff, ChevronDown, Upload, Image } from 'lucide-react';
+import { Plus, X, Trash2, MessageSquare, Eye, EyeOff, ChevronDown, Upload, Image, Reply } from 'lucide-react';
 import { ImageModal } from '../components/ImageModal';
 import { autoFocus } from '../utils/autoFocus';
 
@@ -165,7 +165,7 @@ export const AdminFeedbacks: React.FC = () => {
                 )}
 
                 {feedback.imageUrls && feedback.imageUrls.length > 0 && (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     {feedback.imageUrls.map((url, idx) => (
                       <button 
                         key={idx} 
@@ -175,6 +175,23 @@ export const AdminFeedbacks: React.FC = () => {
                         <img src={url} alt={`Imagem ${idx + 1}`} className="w-full h-full object-cover" />
                       </button>
                     ))}
+                  </div>
+                )}
+
+                {feedback.response && (
+                  <div className="mt-4 p-4 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-200 dark:border-brand-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Reply size={16} className="text-brand-600 dark:text-brand-400" />
+                      <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
+                        Resposta do Designer
+                      </span>
+                      {feedback.responseAt && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
+                          {formatDate(feedback.responseAt)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-slate-700 dark:text-slate-300">{feedback.response}</p>
                   </div>
                 )}
               </div>

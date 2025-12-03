@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { MessageSquare, Eye, Clock, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { MessageSquare, Eye, Clock, X, ChevronLeft, ChevronRight, Send, Reply } from 'lucide-react';
 
 export const DesignerFeedbacks: React.FC = () => {
-  const { currentUser, feedbacks, markFeedbackViewed } = useApp();
+  const { currentUser, feedbacks, markFeedbackViewed, respondFeedback } = useApp();
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [responseText, setResponseText] = useState('');
 
   const myFeedbacks = feedbacks.filter(f => f.designerId === currentUser?.id);
   const unviewedCount = myFeedbacks.filter(f => !f.viewed).length;
@@ -34,6 +36,23 @@ export const DesignerFeedbacks: React.FC = () => {
 
   const handleView = async (id: string) => {
     await markFeedbackViewed(id);
+  };
+
+  const handleRespond = async (id: string) => {
+    if (!responseText.trim()) return;
+    await respondFeedback(id, responseText);
+    setRespondingTo(null);
+    setResponseText('');
+  };
+
+  const handleStartRespond = (id: string) => {
+    setRespondingTo(id);
+    setResponseText('');
+  };
+
+  const handleCancelRespond = () => {
+    setRespondingTo(null);
+    setResponseText('');
   };
 
   const formatDate = (timestamp: number) => {
@@ -116,21 +135,77 @@ export const DesignerFeedbacks: React.FC = () => {
                   </div>
                 )}
 
-                {!feedback.viewed && (
-                  <button
-                    onClick={() => handleView(feedback.id)}
-                    className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
-                  >
-                    <Eye size={18} />
-                    Marcar como visto
-                  </button>
-                )}
+                <div className="flex items-center gap-3 mt-4">
+                  {!feedback.viewed && (
+                    <button
+                      onClick={() => handleView(feedback.id)}
+                      className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+                    >
+                      <Eye size={18} />
+                      Marcar como visto
+                    </button>
+                  )}
 
-                {feedback.viewed && feedback.viewedAt && (
-                  <p className="text-xs text-slate-400 dark:text-slate-500">
-                    Visualizado em {formatDate(feedback.viewedAt)}
-                  </p>
-                )}
+                  {feedback.viewed && !feedback.response && (
+                    <button
+                      onClick={() => handleStartRespond(feedback.id)}
+                      className="flex items-center gap-2 px-4 py-2 border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                    >
+                      <Reply size={18} />
+                      Responder
+                    </button>
+                  )}
+
+                  {feedback.viewed && feedback.viewedAt && (
+                    <p className="text-xs text-slate-400 dark:text-slate-500">
+                      Visualizado em {formatDate(feedback.viewedAt)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Área de resposta */}
+                {respondingTo === feedback.id ? (
+                  <div className="mt-4 p-4 bg-slate-50 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                    <textarea
+                      value={responseText}
+                      onChange={(e) => setResponseText(e.target.value)}
+                      placeholder="Digite sua resposta..."
+                      rows={3}
+                      className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg resize-none text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    />
+                    <div className="flex items-center gap-2 mt-3">
+                      <button
+                        onClick={() => handleRespond(feedback.id)}
+                        disabled={!responseText.trim()}
+                        className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Send size={16} />
+                        Enviar
+                      </button>
+                      <button
+                        onClick={handleCancelRespond}
+                        className="px-4 py-2 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                    </div>
+                  </div>
+                ) : feedback.response ? (
+                  <div className="mt-4 p-4 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-200 dark:border-brand-800">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Reply size={16} className="text-brand-600 dark:text-brand-400" />
+                      <span className="text-sm font-medium text-brand-700 dark:text-brand-300">
+                        Sua resposta
+                      </span>
+                      {feedback.responseAt && (
+                        <span className="text-xs text-slate-500 dark:text-slate-400 ml-auto">
+                          {formatDate(feedback.responseAt)}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-slate-700 dark:text-slate-300">{feedback.response}</p>
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}

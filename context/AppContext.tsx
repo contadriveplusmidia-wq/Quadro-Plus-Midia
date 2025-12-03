@@ -31,6 +31,7 @@ interface AppContextType {
   getTodaySession: (userId: string) => WorkSession | undefined;
   addFeedback: (feedback: Omit<Feedback, 'id' | 'createdAt' | 'viewed'>) => Promise<void>;
   markFeedbackViewed: (id: string) => Promise<void>;
+  respondFeedback: (id: string, response: string) => Promise<void>;
   deleteFeedback: (id: string) => Promise<void>;
   addLesson: (lesson: Omit<Lesson, 'id' | 'createdAt' | 'orderIndex'>) => Promise<void>;
   updateLesson: (id: string, lesson: Partial<Lesson>) => Promise<void>;
@@ -371,6 +372,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setFeedbacks(prev => prev.map(f => f.id === id ? { ...f, viewed: true, viewedAt: Date.now() } : f));
   };
 
+  const respondFeedback = async (id: string, response: string) => {
+    await fetch(`${API_URL}/api/feedbacks/${id}/response`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ response })
+    });
+    const responseAt = Date.now();
+    setFeedbacks(prev => prev.map(f => 
+      f.id === id ? { ...f, response, responseAt } : f
+    ));
+  };
+
   const deleteFeedback = async (id: string) => {
     await fetch(`${API_URL}/api/feedbacks/${id}`, { method: 'DELETE' });
     setFeedbacks(prev => prev.filter(f => f.id !== id));
@@ -692,6 +705,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       getTodaySession,
       addFeedback,
       markFeedbackViewed,
+      respondFeedback,
       deleteFeedback,
       addLesson,
       updateLesson,

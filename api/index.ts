@@ -468,7 +468,9 @@ app.get('/api/feedbacks', async (req: Request, res: Response) => {
       comment: f.comment,
       createdAt: parseInt(f.created_at),
       viewed: f.viewed,
-      viewedAt: f.viewed_at ? parseInt(f.viewed_at) : undefined
+      viewedAt: f.viewed_at ? parseInt(f.viewed_at) : undefined,
+      response: f.response || undefined,
+      responseAt: f.response_at ? parseInt(f.response_at) : undefined
     })));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
@@ -502,6 +504,22 @@ app.put('/api/feedbacks/:id/view', async (req: Request, res: Response) => {
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao marcar como visto' });
+  }
+});
+
+app.put('/api/feedbacks/:id/response', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { response } = req.body;
+    const responseAt = Date.now();
+    await pool.query(
+      'UPDATE feedbacks SET response = $1, response_at = $2 WHERE id = $3',
+      [response, responseAt, id]
+    );
+    return res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: 'Erro ao responder feedback' });
   }
 });
 
