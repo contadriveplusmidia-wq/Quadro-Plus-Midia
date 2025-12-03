@@ -204,10 +204,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const checkAutoLogout = () => {
       const loginTimestamp = localStorage.getItem('loginTimestamp');
       const loginDate = localStorage.getItem('loginDate');
-      const currentDate = new Date().toDateString();
-
+      
       if (!loginTimestamp || !loginDate) {
         // Se não tem timestamp, fazer logout por segurança
+        console.log('🔒 Auto-logout: Sem timestamp de login');
         setCurrentUser(null);
         localStorage.removeItem('currentUser');
         localStorage.removeItem('loginTimestamp');
@@ -215,8 +215,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return;
       }
 
-      // Verificar se mudou o dia (desconectar todos)
-      if (loginDate !== currentDate) {
+      const loginTime = parseInt(loginTimestamp, 10);
+      const currentTime = Date.now();
+      
+      // Verificar se mudou o dia (desconectar todos) - verificação mais robusta
+      // Comparar datas normalizadas (sem hora) para detectar mudança de dia
+      const loginDateObj = new Date(loginDate);
+      loginDateObj.setHours(0, 0, 0, 0);
+      
+      const currentDateObj = new Date();
+      currentDateObj.setHours(0, 0, 0, 0);
+      
+      const loginDateNormalized = loginDateObj.getTime();
+      const currentDateNormalized = currentDateObj.getTime();
+      const daysDifference = Math.floor((currentDateNormalized - loginDateNormalized) / (1000 * 60 * 60 * 24));
+      
+      if (daysDifference > 0 || loginDateObj.toDateString() !== currentDateObj.toDateString()) {
+        console.log('🔒 Auto-logout: Mudou o dia', { 
+          loginDate: loginDateObj.toLocaleDateString('pt-BR'),
+          currentDate: currentDateObj.toLocaleDateString('pt-BR'),
+          daysDifference 
+        });
         setCurrentUser(null);
         localStorage.removeItem('currentUser');
         localStorage.removeItem('loginTimestamp');
@@ -226,11 +245,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       // Verificar se passou 6 horas para designers
       if (currentUser.role === 'DESIGNER') {
-        const loginTime = parseInt(loginTimestamp, 10);
-        const currentTime = Date.now();
         const hoursConnected = (currentTime - loginTime) / (1000 * 60 * 60); // Converter para horas
-
+        
         if (hoursConnected >= 6) {
+          console.log('🔒 Auto-logout: Designer conectado há mais de 6 horas', { 
+            hoursConnected: hoursConnected.toFixed(2),
+            loginTime: new Date(loginTime).toLocaleString('pt-BR'),
+            currentTime: new Date(currentTime).toLocaleString('pt-BR')
+          });
           setCurrentUser(null);
           localStorage.removeItem('currentUser');
           localStorage.removeItem('loginTimestamp');
@@ -252,23 +274,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     window.addEventListener('focus', handleFocus);
 
-    // Verificar mudança de data (meia-noite)
+    // Verificar mudança de data (meia-noite) - verificação mais frequente
     const checkDateChange = () => {
       const currentDate = new Date().toDateString();
       const savedDate = localStorage.getItem('loginDate');
       if (savedDate && savedDate !== currentDate) {
+        console.log('🔒 Auto-logout: Detecção de mudança de data', { savedDate, currentDate });
         setCurrentUser(null);
         localStorage.removeItem('currentUser');
         localStorage.removeItem('loginTimestamp');
         localStorage.removeItem('loginDate');
       }
     };
-    const dateCheckInterval = setInterval(checkDateChange, 60000); // Verificar a cada minuto
+    const dateCheckInterval = setInterval(checkDateChange, 30000); // Verificar a cada 30 segundos para detectar meia-noite mais rápido
+
+    // Verificar também quando a visibilidade da página muda
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        checkAutoLogout();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       clearInterval(interval);
       clearInterval(dateCheckInterval);
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [currentUser]);
 

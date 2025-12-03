@@ -1,8 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, RefreshCw, X } from 'lucide-react';
+import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, RefreshCw, X, Circle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { DatePicker } from '../components/DatePicker';
+import { HistoryCharts } from '../components/HistoryCharts';
 
 type ChartMode = 'somaPoints' | 'somaArts' | 'mediaPoints' | 'mediaArts';
 type DateFilterType = 'hoje' | 'semana' | 'mes' | 'custom';
@@ -59,14 +60,48 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, i
 };
 
 export const AdminDashboard: React.FC = () => {
-  const { users, demands, artTypes, refreshData } = useApp();
-  const [selectedDesigner, setSelectedDesigner] = useState<string>('all');
+  const { users, demands, artTypes, refreshData, getTodaySession } = useApp();
+  const [selectedDesigner, setSelectedDesigner] = useState<string>('');
   const [dateFilter, setDateFilter] = useState<DateFilterType>('semana');
   const [chartMode, setChartMode] = useState<ChartMode>('somaArts');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDark, setIsDark] = useState(false);
+
+  // Estado para forçar re-render e atualizar status periodicamente
+  const [, setRefreshStatus] = useState(0);
+
+  // Atualizar status a cada 30 segundos
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshStatus(prev => prev + 1);
+    }, 30000); // 30 segundos
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Função para verificar se um designer está online
+  const isDesignerOnline = (designerId: string): boolean => {
+    // Verificar se tem sessão de trabalho hoje
+    const todaySession = getTodaySession(designerId);
+    if (!todaySession) return false;
+
+    // Verificar última atividade (última demanda)
+    const lastDemand = demands
+      .filter(d => d.userId === designerId)
+      .sort((a, b) => b.timestamp - a.timestamp)[0];
+
+    if (!lastDemand) {
+      // Se tem sessão mas não tem demanda, considerar online se a sessão foi criada recentemente (últimos 30 min)
+      const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+      return todaySession.timestamp >= thirtyMinutesAgo;
+    }
+
+    // Considerar online se teve atividade nos últimos 30 minutos
+    const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
+    return lastDemand.timestamp >= thirtyMinutesAgo;
+  };
 
   // Detectar tema claro/escuro
   useEffect(() => {
@@ -218,7 +253,8 @@ export const AdminDashboard: React.FC = () => {
   const filteredDemands = useMemo(() => {
     const { start, end } = getDateRange();
     let filtered = demands.filter(d => d.timestamp >= start && d.timestamp <= end);
-    if (selectedDesigner !== 'all') {
+    // Se selectedDesigner está vazio ou é 'all', mostra todos. Caso contrário, filtra por designer específico
+    if (selectedDesigner && selectedDesigner !== 'all') {
       filtered = filtered.filter(d => d.userId === selectedDesigner);
     }
     return filtered;
@@ -302,40 +338,82 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
-          <div className="flex items-center gap-2.5">
-            <Filter className="text-brand-600 dark:text-slate-300" size={20} />
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Visão Geral</h2>
+        <div className="flex flex-col gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <Filter className="text-brand-600 dark:text-slate-300" size={20} />
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Visão Geral</h2>
+            </div>
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 disabled:opacity-50 shadow-sm hover:shadow"
+            >
+              <RefreshCw 
+                size={16} 
+                className={isRefreshing ? 'animate-spin' : ''} 
+              />
+              <span className="hidden sm:inline">Atualizar</span>
+            </button>
           </div>
-          <button
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-2 px-3.5 py-2 text-sm font-medium text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all duration-200 disabled:opacity-50 shadow-sm hover:shadow"
-          >
-            <RefreshCw 
-              size={16} 
-              className={isRefreshing ? 'animate-spin' : ''} 
-            />
-            <span className="hidden sm:inline">Atualizar</span>
-          </button>
+          
+          {/* Lista de designers com status online/offline */}
+          <div className="flex flex-wrap items-center gap-3">
+            {designers.map(d => {
+              const isOnline = isDesignerOnline(d.id);
+              return (
+                <div
+                  key={d.id}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all cursor-pointer border ${
+                    selectedDesigner === d.id
+                      ? 'bg-brand-50 dark:bg-brand-900/20 border-brand-300 dark:border-brand-700 shadow-sm'
+                      : 'bg-slate-50 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700'
+                  }`}
+                  onClick={() => setSelectedDesigner(d.id)}
+                >
+                  <div className="relative flex-shrink-0">
+                    <Circle
+                      size={10}
+                      className={`${
+                        isOnline
+                          ? 'text-green-500 fill-green-500'
+                          : 'text-slate-400 fill-slate-400'
+                      }`}
+                    />
+                    {isOnline && (
+                      <Circle
+                        size={10}
+                        className="absolute inset-0 text-green-500 fill-green-500 animate-ping opacity-75"
+                      />
+                    )}
+                  </div>
+                  <span className={`font-medium ${
+                    selectedDesigner === d.id
+                      ? 'text-brand-700 dark:text-brand-300'
+                      : 'text-slate-700 dark:text-slate-300'
+                  }`}>
+                    {d.name.split(' - ')[1] || d.name}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
         <div className="flex flex-col lg:flex-row lg:items-center gap-4 mb-6">
           <div className="flex-shrink-0">
-            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">Designer</label>
-            <div className="relative">
-              <select
-                value={selectedDesigner}
-                onChange={(e) => setSelectedDesigner(e.target.value)}
-                className="w-full lg:w-56 pl-3 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none text-sm font-medium text-slate-900 dark:text-white transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-sm hover:shadow"
-              >
-                <option value="all">Todos os Designers</option>
-                {designers.map(d => (
-                  <option key={d.id} value={d.id}>{d.name}</option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-            </div>
+            <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wide">Visualização</label>
+            <button
+              onClick={() => setSelectedDesigner(selectedDesigner === 'all' ? '' : 'all')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 border ${
+                selectedDesigner === 'all'
+                  ? 'bg-brand-600 dark:bg-brand-600 text-white border-brand-600 dark:border-brand-600 shadow-sm'
+                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'
+              }`}
+            >
+              <Users size={16} />
+              <span>Todos os Designers</span>
+            </button>
           </div>
 
           <div className="flex-1">
@@ -671,6 +749,9 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Gráficos de Produtividade */}
+      <HistoryCharts demands={demands} designers={designers} />
     </div>
   );
 };

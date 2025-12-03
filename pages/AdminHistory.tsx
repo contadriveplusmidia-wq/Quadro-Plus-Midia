@@ -164,9 +164,20 @@ export const AdminHistory: React.FC = () => {
     });
   };
 
+  // Calcular estatísticas do período
+  const stats = useMemo(() => {
+    const totalPoints = filteredDemands.reduce((acc, d) => acc + d.totalPoints, 0);
+    const totalDemands = filteredDemands.length;
+    const uniqueDesigners = new Set(filteredDemands.map(d => d.userId)).size;
+    const avgPointsPerDemand = totalDemands > 0 ? Math.round(totalPoints / totalDemands) : 0;
+    
+    return { totalPoints, totalDemands, uniqueDesigners, avgPointsPerDemand };
+  }, [filteredDemands]);
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Header */}
+      <div className="flex flex-col gap-6">
         <div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Histórico</h1>
           <p className="text-slate-500 dark:text-slate-400 mt-1">
@@ -174,138 +185,179 @@ export const AdminHistory: React.FC = () => {
           </p>
         </div>
         
-        <div className="flex flex-wrap gap-3">
-          <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('sessions')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'sessions'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              Expedientes
-            </button>
-            <button
-              onClick={() => setViewMode('demands')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'demands'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              Demandas
-            </button>
-            <button
-              onClick={() => setViewMode('charts')}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === 'charts'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              Gráficos
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <div className="relative">
-            <select
-              value={adminFilters.period}
-              onChange={(e) => {
-                const period = e.target.value as TimeFilter;
-                setAdminFilters({ ...adminFilters, period, customRange: undefined });
-                if (period !== 'custom') {
-                  setCustomStartDate('');
-                  setCustomEndDate('');
-                }
-              }}
-              className="pl-10 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 text-sm font-medium text-slate-900 dark:text-white shadow-sm hover:shadow"
-            >
-                <option value="today">Hoje</option>
-                <option value="yesterday">Ontem</option>
-                <option value="weekly">Esta Semana</option>
-                <option value="monthly">Este Mês</option>
-                <option value="yearly">Este Ano</option>
-                <option value="custom">Personalizado</option>
-              </select>
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
-              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+        {/* Filtros em card organizado */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
+          <div className="flex flex-col lg:flex-row gap-4">
+            {/* Modo de visualização */}
+            <div className="flex-shrink-0">
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">
+                Visualização
+              </label>
+              <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('sessions')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === 'sessions'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Expedientes
+                </button>
+                <button
+                  onClick={() => setViewMode('demands')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === 'demands'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Demandas
+                </button>
+                <button
+                  onClick={() => setViewMode('charts')}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                    viewMode === 'charts'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  Gráficos
+                </button>
+              </div>
             </div>
 
-            {adminFilters.period === 'custom' && (
-              <>
-                <DatePicker
-                  value={customStartDate || formatDateForInput(getDateRange().start)}
-                  onChange={(selectedDate) => {
-                    setCustomStartDate(selectedDate);
-                    if (!customEndDate || selectedDate > customEndDate) {
-                      setCustomEndDate(selectedDate);
-                    }
-                  }}
-                  max={customEndDate || undefined}
-                  title="Data inicial"
-                  placeholder="Data inicial"
-                />
-                <span className="text-slate-400 dark:text-slate-500 font-medium text-sm">até</span>
-                <DatePicker
-                  value={customEndDate || formatDateForInput(getDateRange().end)}
-                  onChange={(selectedDate) => {
-                    setCustomEndDate(selectedDate);
-                    if (selectedDate < customStartDate) {
-                      setCustomStartDate(selectedDate);
-                    }
-                  }}
-                  min={customStartDate || undefined}
-                  title="Data final"
-                  placeholder="Data final"
-                />
-                {(customStartDate || customEndDate) && (
-                  <button
-                    onClick={() => {
-                      setCustomStartDate('');
-                      setCustomEndDate('');
+            {/* Filtro de período */}
+            <div className="flex-1 min-w-0">
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">
+                Período
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative flex-1 min-w-[180px]">
+                  <select
+                    value={adminFilters.period}
+                    onChange={(e) => {
+                      const period = e.target.value as TimeFilter;
+                      setAdminFilters({ ...adminFilters, period, customRange: undefined });
+                      if (period !== 'custom') {
+                        setCustomStartDate('');
+                        setCustomEndDate('');
+                      }
                     }}
-                    className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition-all duration-200 shadow-sm hover:shadow"
-                    title="Limpar seleção"
+                    className="w-full pl-10 pr-8 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600 outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 text-sm font-medium text-slate-900 dark:text-white"
                   >
-                    <X size={16} />
-                  </button>
-                )}
-              </>
-            )}
-          </div>
+                    <option value="today">Hoje</option>
+                    <option value="yesterday">Ontem</option>
+                    <option value="weekly">Esta Semana</option>
+                    <option value="monthly">Este Mês</option>
+                    <option value="yearly">Este Ano</option>
+                    <option value="custom">Personalizado</option>
+                  </select>
+                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+                  <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+                </div>
 
-          <div className="relative">
-            <select
-              value={adminFilters.designerId}
-              onChange={(e) => setAdminFilters({ ...adminFilters, designerId: e.target.value })}
-              className="pl-10 pr-8 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl appearance-none focus:ring-2 focus:ring-brand-600 outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 text-sm font-medium text-slate-900 dark:text-white shadow-sm hover:shadow"
-            >
-              <option value="all">Todos Designers</option>
-              {designers.map(d => (
-                <option key={d.id} value={d.id}>{d.name}</option>
-              ))}
-            </select>
-            <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
-            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+                {adminFilters.period === 'custom' && (
+                  <>
+                    <DatePicker
+                      value={customStartDate || formatDateForInput(getDateRange().start)}
+                      onChange={(selectedDate) => {
+                        setCustomStartDate(selectedDate);
+                        if (!customEndDate || selectedDate > customEndDate) {
+                          setCustomEndDate(selectedDate);
+                        }
+                      }}
+                      max={customEndDate || undefined}
+                      title="Data inicial"
+                      placeholder="Data inicial"
+                    />
+                    <span className="text-slate-400 dark:text-slate-500 font-medium text-sm px-1">até</span>
+                    <DatePicker
+                      value={customEndDate || formatDateForInput(getDateRange().end)}
+                      onChange={(selectedDate) => {
+                        setCustomEndDate(selectedDate);
+                        if (selectedDate < customStartDate) {
+                          setCustomStartDate(selectedDate);
+                        }
+                      }}
+                      min={customStartDate || undefined}
+                      title="Data final"
+                      placeholder="Data final"
+                    />
+                    {(customStartDate || customEndDate) && (
+                      <button
+                        onClick={() => {
+                          setCustomStartDate('');
+                          setCustomEndDate('');
+                        }}
+                        className="px-3 py-2.5 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-all duration-200"
+                        title="Limpar seleção"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Filtro de designer */}
+            <div className="flex-shrink-0">
+              <label className="block text-xs font-medium text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">
+                Designer
+              </label>
+              <div className="relative min-w-[200px]">
+                <select
+                  value={adminFilters.designerId}
+                  onChange={(e) => setAdminFilters({ ...adminFilters, designerId: e.target.value })}
+                  className="w-full pl-10 pr-8 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg appearance-none focus:ring-2 focus:ring-brand-600 focus:border-brand-600 outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 text-sm font-medium text-slate-900 dark:text-white"
+                >
+                  <option value="all">Todos Designers</option>
+                  {designers.map(d => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+                <Users className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+                <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500 pointer-events-none" size={16} />
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Exibir total de artes acima da tabela */}
+      {/* Cards de estatísticas */}
       {(viewMode === 'sessions' || viewMode === 'demands') && (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Filter className="text-slate-500 dark:text-slate-400" size={18} />
-              <span className="text-sm font-medium text-slate-600 dark:text-slate-400">
-                Total de artes no período:
-              </span>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Total de Artes</span>
+              <Filter className="text-slate-400 dark:text-slate-500" size={18} />
             </div>
-            <span className="text-2xl font-bold text-brand-600 dark:text-white">
-              {totalArts}
-            </span>
+            <p className="text-3xl font-bold text-brand-600 dark:text-white">{totalArts}</p>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Total de Pontos</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">pts</span>
+            </div>
+            <p className="text-3xl font-bold text-brand-600 dark:text-white">{stats.totalPoints}</p>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Demandas</span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">registros</span>
+            </div>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.totalDemands}</p>
+          </div>
+          
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 shadow-sm">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-medium text-slate-500 dark:text-slate-400">Designers Ativos</span>
+              <Users className="text-slate-400 dark:text-slate-500" size={18} />
+            </div>
+            <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.uniqueDesigners}</p>
           </div>
         </div>
       )}
@@ -314,37 +366,67 @@ export const AdminHistory: React.FC = () => {
         <HistoryCharts demands={demands} designers={designers} />
       ) : viewMode === 'sessions' ? (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Expedientes</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {sessionRows.length} {sessionRows.length === 1 ? 'expediente encontrado' : 'expedientes encontrados'}
+            </p>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full">
-              <thead className="bg-slate-50 dark:bg-slate-800">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">Designer</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">Data</th>
-                  <th className="px-6 py-4 text-left text-sm font-semibold text-slate-700 dark:text-slate-300">Início</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">Artes</th>
-                  <th className="px-6 py-4 text-right text-sm font-semibold text-slate-700 dark:text-slate-300">Pontos</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Designer</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Data</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Início</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Artes</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pontos</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
                 {sessionRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-slate-500 dark:text-slate-400">
-                      Nenhum registro encontrado
+                    <td colSpan={5} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Clock className="text-slate-300 dark:text-slate-600" size={48} />
+                        <p className="text-slate-500 dark:text-slate-400 font-medium">Nenhum registro encontrado</p>
+                        <p className="text-sm text-slate-400 dark:text-slate-500">Tente ajustar os filtros acima</p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   sessionRows.map(row => (
-                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                      <td className="px-6 py-4 text-slate-900 dark:text-white font-medium">{row.userName}</td>
+                    <tr key={row.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div 
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0"
+                            style={{ 
+                              backgroundColor: designers.find(d => d.id === row.userId)?.avatarColor || '#4F46E5' 
+                            }}
+                          >
+                            {row.userName.charAt(0).toUpperCase()}
+                          </div>
+                          <span className="text-slate-900 dark:text-white font-medium">{row.userName}</span>
+                        </div>
+                      </td>
                       <td className="px-6 py-4 text-slate-600 dark:text-slate-400">{row.date}</td>
-                      <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
-                        <span className="flex items-center gap-2">
-                          <Clock size={16} />
+                      <td className="px-6 py-4">
+                        <span className="flex items-center gap-2 text-slate-600 dark:text-slate-400">
+                          <Clock size={14} className="text-slate-400 dark:text-slate-500" />
                           {row.startTime}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-right text-slate-900 dark:text-white font-semibold">{row.totalArts}</td>
-                      <td className="px-6 py-4 text-right text-brand-600 dark:text-white font-bold">{row.totalPoints}</td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="inline-flex items-center justify-center min-w-[2.5rem] px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-white font-semibold text-sm">
+                          {row.totalArts}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="inline-flex items-center justify-center min-w-[3rem] px-2.5 py-1 rounded-lg bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 font-bold text-sm">
+                          {row.totalPoints}
+                        </span>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -353,40 +435,74 @@ export const AdminHistory: React.FC = () => {
           </div>
         </div>
       ) : (
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 divide-y divide-slate-200 dark:divide-slate-800 shadow-sm">
-          {filteredDemands.length === 0 ? (
-            <div className="p-12 text-center text-slate-500 dark:text-slate-400">
-              Nenhuma demanda encontrada
-            </div>
-          ) : (
-            filteredDemands.map(demand => (
-              <div key={demand.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="font-medium text-slate-900 dark:text-white">{demand.userName}</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                      {formatDateTime(demand.timestamp)}
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {demand.items.map((item, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded text-xs text-slate-600 dark:text-slate-300"
-                        >
-                          {item.quantity}x {item.artTypeLabel}
-                          {item.variationQuantity ? ` (+${item.variationQuantity} var)` : ''}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-brand-600 dark:text-white">{demand.totalPoints} pts</p>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">{demand.totalQuantity} artes</p>
-                  </div>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Demandas</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {filteredDemands.length} {filteredDemands.length === 1 ? 'demanda encontrada' : 'demandas encontradas'}
+            </p>
+          </div>
+          <div className="divide-y divide-slate-200 dark:divide-slate-800">
+            {filteredDemands.length === 0 ? (
+              <div className="p-16 text-center">
+                <div className="flex flex-col items-center gap-3">
+                  <Filter className="text-slate-300 dark:text-slate-600" size={48} />
+                  <p className="text-slate-500 dark:text-slate-400 font-medium">Nenhuma demanda encontrada</p>
+                  <p className="text-sm text-slate-400 dark:text-slate-500">Tente ajustar os filtros acima</p>
                 </div>
               </div>
-            ))
-          )}
+            ) : (
+              filteredDemands.map(demand => (
+                <div key={demand.id} className="p-5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div 
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0"
+                          style={{ 
+                            backgroundColor: designers.find(d => d.id === demand.userId)?.avatarColor || '#4F46E5' 
+                          }}
+                        >
+                          {demand.userName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-slate-900 dark:text-white">{demand.userName}</p>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
+                            <Clock size={12} />
+                            {formatDateTime(demand.timestamp)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {demand.items.map((item, idx) => (
+                          <span
+                            key={idx}
+                            className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
+                          >
+                            {item.quantity}x {item.artTypeLabel}
+                            {item.variationQuantity ? (
+                              <span className="ml-1.5 text-brand-600 dark:text-brand-400">
+                                (+{item.variationQuantity} var)
+                              </span>
+                            ) : ''}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0 text-right">
+                      <div className="inline-flex flex-col items-end gap-1 px-4 py-2.5 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-200 dark:border-brand-800">
+                        <p className="text-2xl font-bold text-brand-600 dark:text-brand-400">{demand.totalPoints}</p>
+                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">pontos</p>
+                      </div>
+                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                        {demand.totalQuantity} {demand.totalQuantity === 1 ? 'arte' : 'artes'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
