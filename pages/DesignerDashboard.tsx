@@ -232,22 +232,16 @@ export const DesignerDashboard: React.FC = () => {
               <span className="uppercase tracking-wider font-medium">Performance do Dia</span>
             </div>
             
-            <div className="flex items-baseline gap-2 mb-4">
-              <div className={`text-4xl sm:text-5xl lg:text-6xl font-bold ${
-                isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
-              } ${
-                totalArtsToday < dailyGoal 
-                  ? 'blur-md opacity-50 select-none pointer-events-none' 
-                  : ''
-              }`}>{totalPointsToday}</div>
-              <div className={`text-xs sm:text-sm ${
-                isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
-              } ${
-                totalArtsToday < dailyGoal 
-                  ? 'blur-sm opacity-50' 
-                  : ''
-              }`}>Pontos totais</div>
-            </div>
+            {totalArtsToday >= dailyGoal && (
+              <div className="flex items-baseline gap-2 mb-4">
+                <div className={`text-4xl sm:text-5xl lg:text-6xl font-bold ${
+                  isDark ? performanceStatus.colors.textDark : performanceStatus.colors.text
+                }`}>{totalPointsToday}</div>
+                <div className={`text-xs sm:text-sm ${
+                  isDark ? performanceStatus.colors.accentDark : performanceStatus.colors.accent
+                }`}>Pontos totais</div>
+              </div>
+            )}
             
             <div className={`border-t ${
               isDark ? 'border-white/10' : 'border-white/20'
@@ -318,7 +312,7 @@ export const DesignerDashboard: React.FC = () => {
                   onClick={() => setSelectedArtType(art.id)}
                   className={`px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-medium text-center ${
                     selectedArtType === art.id
-                      ? 'border-brand-600 bg-brand-50 dark:bg-brand-900/20 text-brand-600 dark:text-brand-400 shadow-sm'
+                      ? 'border-brand-600 bg-brand-50 dark:bg-slate-800 dark:border-slate-600 text-brand-600 dark:text-slate-300 shadow-sm'
                       : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
                   }`}
                 >
