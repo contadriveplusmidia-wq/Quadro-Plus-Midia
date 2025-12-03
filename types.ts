@@ -127,6 +127,7 @@ export interface AdminFilters {
 
 export interface SystemSettings {
   logoUrl?: string; // Base64 or URL
+  faviconUrl?: string; // Base64 or URL for favicon
   brandTitle?: string;
   loginSubtitle?: string;
   variationPoints?: number; // Global point value for variations

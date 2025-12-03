@@ -30,6 +30,7 @@ export const AdminSettings: React.FC = () => {
   const [variationPoints, setVariationPoints] = useState(settings.variationPoints || 5);
   const [dailyArtGoal, setDailyArtGoal] = useState(settings.dailyArtGoal || 8);
   const [logoUrl, setLogoUrl] = useState(settings.logoUrl || '');
+  const [faviconUrl, setFaviconUrl] = useState(settings.faviconUrl || '');
 
   // Sincronizar estados locais apenas na primeira carga
   const [hasInitialized, setHasInitialized] = useState(false);
@@ -41,6 +42,7 @@ export const AdminSettings: React.FC = () => {
       if (settings.variationPoints !== undefined) setVariationPoints(settings.variationPoints || 5);
       if (settings.dailyArtGoal !== undefined) setDailyArtGoal(settings.dailyArtGoal || 8);
       if (settings.logoUrl !== undefined) setLogoUrl(settings.logoUrl || '');
+      if (settings.faviconUrl !== undefined) setFaviconUrl(settings.faviconUrl || '');
       setHasInitialized(true);
     }
   }, [settings, hasInitialized]);
@@ -67,7 +69,8 @@ export const AdminSettings: React.FC = () => {
         loginSubtitle, 
         variationPoints: Number(variationPoints) || 5, 
         dailyArtGoal: Number(dailyArtGoal) || 8,
-        logoUrl 
+        logoUrl,
+        faviconUrl
       };
       console.log('Salvando configurações:', settingsToSave);
       console.log('Valores atuais dos estados:', { variationPoints, dailyArtGoal });
@@ -99,6 +102,23 @@ export const AdminSettings: React.FC = () => {
     const reader = new FileReader();
     reader.onload = () => {
       setLogoUrl(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFaviconUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar se é uma imagem
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione um arquivo de imagem válido.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setFaviconUrl(reader.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -367,6 +387,38 @@ export const AdminSettings: React.FC = () => {
                 {logoUrl && (
                   <button 
                     onClick={() => setLogoUrl('')}
+                    className="ml-2 text-red-500 text-sm"
+                  >
+                    Remover
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Favicon
+            </label>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+              Ícone que aparece na aba do navegador (recomendado: 32x32 ou 16x16 pixels)
+            </p>
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 bg-slate-100 dark:bg-slate-800 rounded-lg flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700">
+                {faviconUrl ? (
+                  <img src={faviconUrl} alt="Favicon" className="w-full h-full object-contain" />
+                ) : (
+                  <Image className="text-slate-400" size={24} />
+                )}
+              </div>
+              <div>
+                <label className="px-4 py-2 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+                  Escolher arquivo
+                  <input type="file" accept="image/*" onChange={handleFaviconUpload} className="hidden" />
+                </label>
+                {faviconUrl && (
+                  <button 
+                    onClick={() => setFaviconUrl('')}
                     className="ml-2 text-red-500 text-sm"
                   >
                     Remover
