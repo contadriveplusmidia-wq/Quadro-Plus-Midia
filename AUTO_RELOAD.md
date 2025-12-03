@@ -87,3 +87,4 @@ Backend (porta 3001):  ✅ Rodando
 Frontend (porta 5000): ✅ Rodando
 ```
 
+

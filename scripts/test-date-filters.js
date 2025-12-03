@@ -100,3 +100,4 @@ console.log(`   ${formatDateForInput(mes.start) === '2025-12-01' && formatDateFo
 
 console.log('✅ Todos os testes concluídos!');
 
+

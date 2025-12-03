@@ -117,21 +117,33 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Aplicar favicon dinamicamente
   useEffect(() => {
+    // Sempre remover todos os favicons existentes primeiro
+    const existingLinks = document.querySelectorAll("link[rel='icon'], link[rel='shortcut icon']");
+    existingLinks.forEach(link => link.remove());
+    
     if (settings.faviconUrl) {
-      // Remover favicon existente
-      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.getElementsByTagName('head')[0].appendChild(link);
+      // Criar novo link para favicon com timestamp para forçar atualização
+      const link = document.createElement('link');
+      link.rel = 'icon';
+      
+      // Adicionar timestamp à URL para forçar atualização do cache do navegador
+      const versionedFavicon = settings.faviconUrl.startsWith('data:')
+        ? settings.faviconUrl // Base64 não pode ter query params
+        : `${settings.faviconUrl}${settings.faviconUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
+      
+      link.href = versionedFavicon;
+      
+      // Detectar e definir tipo de imagem
+      if (settings.faviconUrl.startsWith('data:')) {
+        // Para base64, extrair o tipo da string data
+        const match = settings.faviconUrl.match(/data:image\/(\w+);/);
+        link.type = match ? `image/${match[1]}` : 'image/x-icon';
+      } else {
+        link.type = 'image/x-icon';
       }
-      link.href = settings.faviconUrl;
-    } else {
-      // Remover favicon se não houver
-      const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
-      if (link) {
-        link.remove();
-      }
+      
+      // Adicionar ao head
+      document.getElementsByTagName('head')[0].appendChild(link);
     }
   }, [settings.faviconUrl]);
 

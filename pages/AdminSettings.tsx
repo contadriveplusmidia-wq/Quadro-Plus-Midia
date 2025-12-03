@@ -86,6 +86,35 @@ export const AdminSettings: React.FC = () => {
         if (updatedSettings.variationPoints !== undefined) setVariationPoints(updatedSettings.variationPoints);
         if (updatedSettings.dailyArtGoal !== undefined) setDailyArtGoal(updatedSettings.dailyArtGoal);
       }
+      
+      // Forçar atualização imediata do favicon no navegador
+      if (faviconUrl) {
+        // Remover todos os favicons existentes
+        const existingLinks = document.querySelectorAll("link[rel='icon'], link[rel='shortcut icon']");
+        existingLinks.forEach(link => link.remove());
+        
+        // Criar novo link para favicon com timestamp
+        const link = document.createElement('link');
+        link.rel = 'icon';
+        
+        const versionedFavicon = faviconUrl.startsWith('data:')
+          ? faviconUrl // Base64 não pode ter query params
+          : `${faviconUrl}${faviconUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
+        
+        link.href = versionedFavicon;
+        
+        // Detectar e definir tipo de imagem
+        if (faviconUrl.startsWith('data:')) {
+          const match = faviconUrl.match(/data:image\/(\w+);/);
+          link.type = match ? `image/${match[1]}` : 'image/x-icon';
+        } else {
+          link.type = 'image/x-icon';
+        }
+        
+        // Adicionar ao head
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+      
       alert('Configurações salvas com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar configurações:', error);
