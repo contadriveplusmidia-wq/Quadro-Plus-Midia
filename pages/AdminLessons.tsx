@@ -10,6 +10,7 @@ export const AdminLessons: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [videoUrl, setVideoUrl] = useState('');
+  const [selectedLesson, setSelectedLesson] = useState<string | null>(null);
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -78,6 +79,18 @@ export const AdminLessons: React.FC = () => {
     return getYoutubeThumbnail(lesson.videoUrl);
   };
 
+  const getEmbedUrl = (url: string) => {
+    const videoId = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\s]+)/)?.[1];
+    if (videoId) {
+      return `https://www.youtube.com/embed/${videoId}`;
+    }
+    return url;
+  };
+
+  const handleWatchVideo = (lessonId: string) => {
+    setSelectedLesson(lessonId);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -119,7 +132,10 @@ export const AdminLessons: React.FC = () => {
               >
                 <div className="flex flex-col md:flex-row">
                   {/* Thumbnail */}
-                  <div className="md:w-60 h-36 md:h-auto bg-slate-100 dark:bg-slate-800 flex-shrink-0 relative group">
+                  <div 
+                    className="md:w-60 h-36 md:h-auto bg-slate-100 dark:bg-slate-800 flex-shrink-0 relative group cursor-pointer"
+                    onClick={() => handleWatchVideo(lesson.id)}
+                  >
                     {thumbnail ? (
                       <img 
                         src={thumbnail} 
@@ -275,6 +291,34 @@ export const AdminLessons: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de visualização de vídeo */}
+      {selectedLesson && (() => {
+        const currentLesson = lessons.find(l => l.id === selectedLesson);
+        return currentLesson ? (
+          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl w-full max-w-4xl overflow-hidden">
+              <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <h3 className="font-semibold text-slate-900 dark:text-white">{currentLesson.title}</h3>
+                <button 
+                  onClick={() => setSelectedLesson(null)}
+                  className="text-slate-400 hover:text-slate-600"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="aspect-video">
+                <iframe
+                  src={getEmbedUrl(currentLesson.videoUrl)}
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            </div>
+          </div>
+        ) : null;
+      })()}
     </div>
   );
 };
