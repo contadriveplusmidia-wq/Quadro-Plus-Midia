@@ -447,6 +447,68 @@ app.post('/api/demands', async (req: Request, res: Response) => {
   }
 });
 
+app.put('/api/demands/:id', async (req: Request, res: Response) => {
+  const client = await pool.connect();
+  try {
+    const { id } = req.params;
+    const { items, totalQuantity, totalPoints } = req.body;
+    
+    await client.query('BEGIN');
+    
+    // Atualizar dados da demanda
+    await client.query(
+      'UPDATE demands SET total_quantity = $1, total_points = $2 WHERE id = $3',
+      [totalQuantity, totalPoints, id]
+    );
+    
+    // Remover itens antigos
+    await client.query('DELETE FROM demand_items WHERE demand_id = $1', [id]);
+    
+    // Inserir novos itens
+    for (const item of items) {
+      await client.query(
+        'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+        [id, item.artTypeId, item.artTypeLabel, item.pointsPerUnit, item.quantity, item.variationQuantity || 0, item.variationPoints || 0, item.totalPoints]
+      );
+    }
+    
+    await client.query('COMMIT');
+    
+    // Buscar demanda atualizada
+    const demandResult = await pool.query('SELECT * FROM demands WHERE id = $1', [id]);
+    if (demandResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Demanda não encontrada' });
+    }
+    
+    const demand = demandResult.rows[0];
+    const itemsResult = await pool.query('SELECT * FROM demand_items WHERE demand_id = $1', [id]);
+    
+    return res.json({
+      id: demand.id,
+      userId: demand.user_id,
+      userName: demand.user_name,
+      items: itemsResult.rows.map(i => ({
+        artTypeId: i.art_type_id,
+        artTypeLabel: i.art_type_label,
+        pointsPerUnit: i.points_per_unit,
+        quantity: i.quantity,
+        variationQuantity: i.variation_quantity,
+        variationPoints: i.variation_points,
+        totalPoints: i.total_points
+      })),
+      totalQuantity: demand.total_quantity,
+      totalPoints: demand.total_points,
+      timestamp: parseInt(demand.timestamp)
+    });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error(error);
+    return res.status(500).json({ error: 'Erro ao atualizar demanda' });
+  } finally {
+    client.release();
+  }
+});
+
 app.delete('/api/demands/:id', async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useApp } from '../context/AppContext';
 import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, RefreshCw, X, Circle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
@@ -63,7 +63,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, i
 export const AdminDashboard: React.FC = () => {
   const { users, demands, artTypes, refreshData, getTodaySession, settings } = useApp();
   const [selectedDesigner, setSelectedDesigner] = useState<string>('');
-  const [dateFilter, setDateFilter] = useState<DateFilterType>('semana');
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('hoje');
   const [chartMode, setChartMode] = useState<ChartMode>('somaArts');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
@@ -73,36 +73,79 @@ export const AdminDashboard: React.FC = () => {
   // Estado para forçar re-render e atualizar status periodicamente
   const [, setRefreshStatus] = useState(0);
 
-  // Atualizar status a cada 30 segundos
+  // Atualizar dados e status em tempo real a cada 15 segundos
   useEffect(() => {
+    // Atualizar imediatamente ao montar
+    refreshData();
+    
     const interval = setInterval(() => {
+      // Atualizar dados do servidor para ter status em tempo real
+      refreshData();
+      // Forçar re-render do status
       setRefreshStatus(prev => prev + 1);
-    }, 30000); // 30 segundos
+    }, 15000); // 15 segundos para atualização mais frequente
 
     return () => clearInterval(interval);
-  }, []);
+  }, [refreshData]);
 
-  // Função para verificar se um designer está online
-  const isDesignerOnline = (designerId: string): boolean => {
-    // Verificar se tem sessão de trabalho hoje
-    const todaySession = getTodaySession(designerId);
-    if (!todaySession) return false;
+  // Função para verificar se um designer está online (em tempo real)
+  const isDesignerOnline = useCallback((designerId: string): boolean => {
+    try {
+      // Verificar se tem sessão de trabalho hoje (após 6h)
+      const todaySession = getTodaySession(designerId);
+      if (!todaySession) {
+        return false;
+      }
 
-    // Verificar última atividade (última demanda)
-    const lastDemand = demands
-      .filter(d => d.userId === designerId)
-      .sort((a, b) => b.timestamp - a.timestamp)[0];
+      // Verificar se a sessão foi criada após 6h da manhã
+      const sessionDate = new Date(todaySession.timestamp);
+      const sessionHour = sessionDate.getHours();
+      
+      // Sessão criada antes das 6h não é válida
+      if (sessionHour < 6) {
+        return false;
+      }
 
-    if (!lastDemand) {
-      // Se tem sessão mas não tem demanda, considerar online se a sessão foi criada recentemente (últimos 30 min)
-      const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
-      return todaySession.timestamp >= thirtyMinutesAgo;
+      // Verificar última atividade (última demanda após 6h)
+      const today = new Date();
+      today.setHours(6, 0, 0, 0);
+      const todayStart = today.getTime();
+      
+      const lastDemand = demands
+        .filter(d => {
+          // Filtrar apenas demandas do usuário após 6h de hoje
+          if (d.userId !== designerId) return false;
+          if (d.timestamp < todayStart) return false;
+          
+          const demandDate = new Date(d.timestamp);
+          const demandHour = demandDate.getHours();
+          return demandHour >= 6;
+        })
+        .sort((a, b) => b.timestamp - a.timestamp)[0];
+
+      const now = Date.now();
+      const fifteenMinutesAgo = now - (15 * 60 * 1000); // Reduzido para 15 minutos para detecção mais rápida
+
+      if (!lastDemand) {
+        // Se tem sessão mas não tem demanda, considerar online se a sessão foi criada recentemente (últimos 15 min)
+        // OU se a sessão foi criada hoje e ainda não passou muito tempo (até 2 horas sem atividade)
+        const twoHoursAgo = now - (2 * 60 * 60 * 1000);
+        const sessionIsRecent = todaySession.timestamp >= fifteenMinutesAgo;
+        const sessionIsToday = todaySession.timestamp >= twoHoursAgo;
+        
+        // Se a sessão foi criada recentemente (15 min) OU foi criada hoje e ainda está dentro de 2h, considerar online
+        return sessionIsRecent || (sessionIsToday && todaySession.timestamp >= todayStart);
+      }
+
+      // Considerar online se teve atividade nos últimos 15 minutos
+      // Isso garante que quando alguém sair, o status mude rapidamente
+      const hasRecentActivity = lastDemand.timestamp >= fifteenMinutesAgo;
+      return hasRecentActivity;
+    } catch (error) {
+      console.error('Erro ao verificar status online:', error);
+      return false;
     }
-
-    // Considerar online se teve atividade nos últimos 30 minutos
-    const thirtyMinutesAgo = Date.now() - (30 * 60 * 1000);
-    return lastDemand.timestamp >= thirtyMinutesAgo;
-  };
+  }, [demands, getTodaySession]);
 
   // Detectar tema claro/escuro
   useEffect(() => {
@@ -362,6 +405,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex flex-wrap items-center gap-3">
             {designers.map(d => {
               const isOnline = isDesignerOnline(d.id);
+              // Adicionar key única para forçar re-render quando status mudar
               return (
                 <div
                   key={d.id}
@@ -563,16 +607,6 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
             <button
-              onClick={() => setChartMode('somaPoints')}
-              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
-                chartMode === 'somaPoints'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400'
-              }`}
-            >
-              Soma Pontos
-            </button>
-            <button
               onClick={() => setChartMode('somaArts')}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                 chartMode === 'somaArts'
@@ -581,6 +615,16 @@ export const AdminDashboard: React.FC = () => {
               }`}
             >
               Soma Artes
+            </button>
+            <button
+              onClick={() => setChartMode('somaPoints')}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                chartMode === 'somaPoints'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                  : 'text-slate-600 dark:text-slate-400'
+              }`}
+            >
+              Soma Pontos
             </button>
             <button
               onClick={() => setChartMode('mediaPoints')}

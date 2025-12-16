@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useApp } from '../context/AppContext';
-import { Plus, Minus, Clock, Zap, TrendingUp, Trash2, ClipboardList, Target, CheckCircle, AlertTriangle } from 'lucide-react';
-import { DemandItem, DailyPerformanceResult, PerformanceStatus } from '../types';
+import { Plus, Minus, Clock, Zap, TrendingUp, Trash2, ClipboardList, Target, CheckCircle, AlertTriangle, Edit2, X } from 'lucide-react';
+import { DemandItem, DailyPerformanceResult, PerformanceStatus, Demand } from '../types';
 import { autoFocus } from '../utils/autoFocus';
 
 // Função centralizada para calcular status de performance diária
@@ -58,11 +58,13 @@ const getDailyPerformanceStatus = (artsToday: number, dailyGoal: number): DailyP
 };
 
 export const DesignerDashboard: React.FC = () => {
-  const { currentUser, artTypes, demands, addDemand, deleteDemand, startWorkSession, getTodaySession, settings } = useApp();
+  const { currentUser, artTypes, demands, addDemand, updateDemand, deleteDemand, startWorkSession, getTodaySession, settings } = useApp();
   const [items, setItems] = useState<DemandItem[]>([]);
   const [selectedArtType, setSelectedArtType] = useState('');
   const [quantity, setQuantity] = useState(1);
   const [variationQty, setVariationQty] = useState(0);
+  const [editingDemand, setEditingDemand] = useState<Demand | null>(null);
+  const [editItems, setEditItems] = useState<DemandItem[]>([]);
 
   const todaySession = currentUser ? getTodaySession(currentUser.id) : undefined;
   
@@ -484,12 +486,25 @@ export const DesignerDashboard: React.FC = () => {
                     {demand.totalQuantity}
                   </td>
                   <td className="px-6 py-4 text-center">
-                    <button 
-                      onClick={() => deleteDemand(demand.id)}
-                      className="text-slate-400 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 size={18} />
-                    </button>
+                    <div className="flex items-center justify-center gap-2">
+                      <button 
+                        onClick={() => {
+                          setEditingDemand(demand);
+                          setEditItems([...demand.items]);
+                        }}
+                        className="text-slate-400 hover:text-brand-600 transition-colors"
+                        title="Editar demanda"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button 
+                        onClick={() => deleteDemand(demand.id)}
+                        className="text-slate-400 hover:text-red-500 transition-colors"
+                        title="Excluir demanda"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -504,6 +519,181 @@ export const DesignerDashboard: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Modal de Edição de Demanda */}
+      {editingDemand && (
+        <div className="fixed inset-0 bg-black/50 dark:bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Editar Demanda</h3>
+              <button
+                onClick={() => {
+                  setEditingDemand(null);
+                  setEditItems([]);
+                }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              {editItems.map((item, idx) => {
+                const artType = artTypes.find(a => a.id === item.artTypeId);
+                return (
+                  <div key={idx} className="bg-slate-50 dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="font-medium text-slate-900 dark:text-white">{item.artTypeLabel}</span>
+                      <button
+                        onClick={() => {
+                          const newItems = editItems.filter((_, i) => i !== idx);
+                          setEditItems(newItems);
+                        }}
+                        className="text-red-400 hover:text-red-600 transition-colors"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Quantidade</label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              const newItems = [...editItems];
+                              if (newItems[idx].quantity > 1) {
+                                newItems[idx].quantity -= 1;
+                                newItems[idx].totalPoints = (newItems[idx].quantity * newItems[idx].pointsPerUnit) + (newItems[idx].variationQuantity * (newItems[idx].variationPoints || 0));
+                                setEditItems(newItems);
+                              }
+                            }}
+                            className="p-1.5 bg-white dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const newItems = [...editItems];
+                              newItems[idx].quantity = Math.max(1, parseInt(e.target.value) || 1);
+                              newItems[idx].totalPoints = (newItems[idx].quantity * newItems[idx].pointsPerUnit) + (newItems[idx].variationQuantity * (newItems[idx].variationPoints || 0));
+                              setEditItems(newItems);
+                            }}
+                            className="w-20 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-center text-sm font-medium text-slate-900 dark:text-white"
+                          />
+                          <button
+                            onClick={() => {
+                              const newItems = [...editItems];
+                              newItems[idx].quantity += 1;
+                              newItems[idx].totalPoints = (newItems[idx].quantity * newItems[idx].pointsPerUnit) + (newItems[idx].variationQuantity * (newItems[idx].variationPoints || 0));
+                              setEditItems(newItems);
+                            }}
+                            className="p-1.5 bg-white dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1">Variações</label>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => {
+                              const newItems = [...editItems];
+                              if (newItems[idx].variationQuantity > 0) {
+                                newItems[idx].variationQuantity -= 1;
+                                newItems[idx].variationPoints = newItems[idx].variationQuantity * (settings.variationPoints || 5);
+                                newItems[idx].totalPoints = (newItems[idx].quantity * newItems[idx].pointsPerUnit) + newItems[idx].variationPoints;
+                                setEditItems(newItems);
+                              }
+                            }}
+                            className="p-1.5 bg-white dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                          >
+                            <Minus size={14} />
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.variationQuantity || 0}
+                            onChange={(e) => {
+                              const newItems = [...editItems];
+                              newItems[idx].variationQuantity = Math.max(0, parseInt(e.target.value) || 0);
+                              newItems[idx].variationPoints = newItems[idx].variationQuantity * (settings.variationPoints || 5);
+                              newItems[idx].totalPoints = (newItems[idx].quantity * newItems[idx].pointsPerUnit) + newItems[idx].variationPoints;
+                              setEditItems(newItems);
+                            }}
+                            className="w-20 px-3 py-2 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded text-center text-sm font-medium text-slate-900 dark:text-white"
+                          />
+                          <button
+                            onClick={() => {
+                              const newItems = [...editItems];
+                              newItems[idx].variationQuantity = (newItems[idx].variationQuantity || 0) + 1;
+                              newItems[idx].variationPoints = newItems[idx].variationQuantity * (settings.variationPoints || 5);
+                              newItems[idx].totalPoints = (newItems[idx].quantity * newItems[idx].pointsPerUnit) + newItems[idx].variationPoints;
+                              setEditItems(newItems);
+                            }}
+                            className="p-1.5 bg-white dark:bg-slate-700 rounded border border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {editItems.length === 0 && (
+                <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                  Nenhum item na demanda. Adicione itens para salvar.
+                </div>
+              )}
+
+              <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                <button
+                  onClick={() => {
+                    setEditingDemand(null);
+                    setEditItems([]);
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    if (editItems.length === 0) {
+                      alert('Adicione pelo menos um item para salvar a demanda.');
+                      return;
+                    }
+                    // Variações não contam como artes, apenas como pontos
+                    const totalQuantity = editItems.reduce((acc, item) => {
+                      const isVariation = item.artTypeLabel.toLowerCase().includes('variação');
+                      return acc + (isVariation ? 0 : item.quantity);
+                    }, 0);
+                    const totalPoints = editItems.reduce((acc, item) => acc + item.totalPoints, 0);
+                    try {
+                      await updateDemand(editingDemand.id, {
+                        items: editItems,
+                        totalQuantity,
+                        totalPoints
+                      });
+                      setEditingDemand(null);
+                      setEditItems([]);
+                    } catch (error) {
+                      alert('Erro ao atualizar demanda. Tente novamente.');
+                    }
+                  }}
+                  className="flex-1 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

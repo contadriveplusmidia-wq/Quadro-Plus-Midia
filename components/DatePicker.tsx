@@ -47,13 +47,17 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     }
   }, [isOpen]);
 
-  // Inicializar mês atual com base na data selecionada
+  // Inicializar mês atual com base na data selecionada ou usar mês atual
   useEffect(() => {
     if (value) {
       // Parse manual para evitar problemas de timezone
       const [year, month, day] = value.split('-').map(Number);
       const date = new Date(year, month - 1, day);
       setCurrentMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+    } else {
+      // Se não há valor, usar mês atual
+      const now = new Date();
+      setCurrentMonth(new Date(now.getFullYear(), now.getMonth(), 1));
     }
   }, [value]);
 
@@ -78,13 +82,21 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     const lastDay = new Date(year, month + 1, 0);
     const days: Date[] = [];
 
-    // Adicionar dias do mês anterior para completar a semana (começando na segunda)
-    const startDay = firstDay.getDay();
-    const daysToAdd = startDay === 0 ? 6 : startDay - 1; // Se domingo, adicionar 6 dias; senão, startDay - 1
+    // getDay() retorna: 0=Domingo, 1=Segunda, 2=Terça, 3=Quarta, 4=Quinta, 5=Sexta, 6=Sábado
+    // Agora incluímos domingo no calendário (7 dias por semana)
+    const startDay = firstDay.getDay(); // 0-6 (Domingo-Sábado)
     
-    for (let i = daysToAdd - 1; i >= 0; i--) {
-      const prevDate = new Date(year, month, -i);
-      days.push(prevDate);
+    // Adicionar dias do mês anterior para completar a primeira semana (começando no domingo)
+    if (startDay > 0) {
+      const prevMonth = month === 0 ? 11 : month - 1;
+      const prevYear = month === 0 ? year - 1 : year;
+      const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
+      
+      // Adicionar dias do mês anterior começando do último dia
+      for (let i = startDay - 1; i >= 0; i--) {
+        const day = daysInPrevMonth - i;
+        days.push(new Date(prevYear, prevMonth, day));
+      }
     }
 
     // Adicionar dias do mês atual
@@ -93,10 +105,17 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     }
 
     // Adicionar dias do próximo mês para completar a última semana (até sábado)
-    const remainingDays = 6 - (days.length % 7);
-    if (remainingDays < 6 && remainingDays > 0) {
-      for (let day = 1; day <= remainingDays; day++) {
-        days.push(new Date(year, month + 1, day));
+    // Calcular quantos dias faltam para completar múltiplos de 7 (7 dias por semana)
+    const totalDays = days.length;
+    const remainder = totalDays % 7;
+    const daysNeeded = remainder === 0 ? 0 : 7 - remainder;
+    
+    if (daysNeeded > 0) {
+      const nextMonth = month === 11 ? 0 : month + 1;
+      const nextYear = month === 11 ? year + 1 : year;
+      
+      for (let day = 1; day <= daysNeeded; day++) {
+        days.push(new Date(nextYear, nextMonth, day));
       }
     }
 
@@ -166,7 +185,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({
     'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
   ];
 
-  const weekDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const weekDays = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const days = getDaysInMonth(currentMonth);
 
   return (
@@ -214,11 +233,15 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           </div>
 
           {/* Dias da Semana */}
-          <div className="grid grid-cols-6 gap-1 mb-2">
+          <div className="grid grid-cols-7 gap-1 mb-2">
             {weekDays.map(day => (
               <div
                 key={day}
-                className="text-xs font-semibold text-slate-500 dark:text-slate-400 text-center py-1"
+                className={`text-xs font-semibold text-center py-1 ${
+                  day === 'Dom' 
+                    ? 'text-slate-300 dark:text-slate-600' 
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}
               >
                 {day}
               </div>
@@ -226,21 +249,24 @@ export const DatePicker: React.FC<DatePickerProps> = ({
           </div>
 
           {/* Grid de Dias */}
-          <div className="grid grid-cols-6 gap-1">
+          <div className="grid grid-cols-7 gap-1">
             {days.map((date, idx) => {
               const disabled = isDateDisabled(date);
               const selected = isDateSelected(date);
               const today = isToday(date);
               const currentMonthDay = isCurrentMonth(date);
+              const isSunday = date.getDay() === 0; // 0 = Domingo
 
               return (
                 <button
                   key={idx}
                   onClick={() => handleDateClick(date)}
-                  disabled={disabled}
+                  disabled={disabled || isSunday}
                   className={`
                     aspect-square text-sm font-medium rounded-lg transition-all duration-200
-                    ${disabled
+                    ${isSunday
+                      ? 'text-slate-200 dark:text-slate-700 cursor-not-allowed opacity-30'
+                      : disabled
                       ? 'text-slate-300 dark:text-slate-600 cursor-not-allowed opacity-50'
                       : selected
                       ? 'bg-brand-600 text-white shadow-md hover:bg-brand-700'

@@ -26,6 +26,7 @@ interface AppContextType {
   logout: () => void;
   setAdminFilters: (filters: AdminFilters) => void;
   addDemand: (demand: Omit<Demand, 'id' | 'timestamp'>) => Promise<void>;
+  updateDemand: (id: string, demand: Partial<Demand>) => Promise<void>;
   deleteDemand: (id: string) => Promise<void>;
   startWorkSession: (userId: string) => Promise<void>;
   getTodaySession: (userId: string) => WorkSession | undefined;
@@ -403,6 +404,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setDemands(prev => [newDemand, ...prev]);
   };
 
+  const updateDemand = async (id: string, demand: Partial<Demand>) => {
+    const res = await fetch(`${API_URL}/api/demands/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(demand)
+    });
+    if (!res.ok) throw new Error('Erro ao atualizar demanda');
+    const updated = await res.json();
+    setDemands(prev => prev.map(d => d.id === id ? updated : d));
+  };
+
   const deleteDemand = async (id: string) => {
     await fetch(`${API_URL}/api/demands/${id}`, { method: 'DELETE' });
     setDemands(prev => prev.filter(d => d.id !== id));
@@ -420,10 +432,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const getTodaySession = (userId: string): WorkSession | undefined => {
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return workSessions.find(s => 
-      s.userId === userId && s.timestamp >= today.getTime()
-    );
+    today.setHours(6, 0, 0, 0); // Início do dia útil: 6h
+    const todayStart = today.getTime();
+    
+    // Buscar sessão criada hoje após 6h
+    return workSessions.find(s => {
+      if (s.userId !== userId) return false;
+      const sessionDate = new Date(s.timestamp);
+      const sessionHour = sessionDate.getHours();
+      // Só considerar sessões após 6h
+      return s.timestamp >= todayStart && sessionHour >= 6;
+    });
   };
 
   const addFeedback = async (feedback: Omit<Feedback, 'id' | 'createdAt' | 'viewed'>) => {
@@ -769,6 +788,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       logout,
       setAdminFilters,
       addDemand,
+      updateDemand,
       deleteDemand,
       startWorkSession,
       getTodaySession,

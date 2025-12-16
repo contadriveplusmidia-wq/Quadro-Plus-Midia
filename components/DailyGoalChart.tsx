@@ -152,9 +152,13 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
           }))
           .sort((a, b) => b.artsCount - a.artsCount); // Ordenar por quantidade (maior primeiro)
 
+        // Formatar label com dia da semana e número do dia
+        const dayNumber = current.getDate();
+        const dayLabel = `${shortDayNames[dayOfWeek]} ${dayNumber}`;
+        
         days.push({
           date: new Date(current),
-          label: shortDayNames[dayOfWeek],
+          label: dayLabel,
           designers: designersWhoHitGoal
         });
       }
