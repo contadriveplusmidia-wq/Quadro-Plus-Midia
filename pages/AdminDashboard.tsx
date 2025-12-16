@@ -4,6 +4,7 @@ import { Filter, Award, Calendar, TrendingUp, BarChart3, Users, ChevronDown, Ref
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { DatePicker } from '../components/DatePicker';
 import { HistoryCharts } from '../components/HistoryCharts';
+import { DailyGoalChart } from '../components/DailyGoalChart';
 
 type ChartMode = 'somaPoints' | 'somaArts' | 'mediaPoints' | 'mediaArts';
 type DateFilterType = 'hoje' | 'semana' | 'mes' | 'custom';
@@ -60,7 +61,7 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, i
 };
 
 export const AdminDashboard: React.FC = () => {
-  const { users, demands, artTypes, refreshData, getTodaySession } = useApp();
+  const { users, demands, artTypes, refreshData, getTodaySession, settings } = useApp();
   const [selectedDesigner, setSelectedDesigner] = useState<string>('');
   const [dateFilter, setDateFilter] = useState<DateFilterType>('semana');
   const [chartMode, setChartMode] = useState<ChartMode>('somaArts');
@@ -749,6 +750,16 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Visualização de Meta Diária Batida */}
+      <DailyGoalChart
+        demands={filteredDemands}
+        designers={designers}
+        settings={settings}
+        startDate={start}
+        endDate={end}
+        isDark={isDark}
+      />
 
       {/* Gráficos de Produtividade */}
       <HistoryCharts demands={demands} designers={designers} />
