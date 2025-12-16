@@ -330,11 +330,26 @@ app.get('/api/work-sessions', async (req: Request, res: Response) => {
 app.post('/api/work-sessions', async (req: Request, res: Response) => {
   try {
     const { userId } = req.body;
+    const now = new Date();
+    const currentHour = now.getHours();
+    
+    // Verificar se é antes das 6h da manhã - não permitir registro
+    if (currentHour < 6) {
+      return res.status(400).json({ 
+        error: 'Registros só são permitidos a partir das 6h da manhã',
+        code: 'BEFORE_6AM'
+      });
+    }
+    
     const id = `session-${Date.now()}`;
     const timestamp = Date.now();
+    
+    // Calcular início do dia útil (6h da manhã)
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(6, 0, 0, 0); // Início do dia útil: 6h
     const todayStart = today.getTime();
+    
+    // Verificar se já existe sessão hoje (após 6h)
     const existing = await pool.query(
       'SELECT * FROM work_sessions WHERE user_id = $1 AND timestamp >= $2 ORDER BY timestamp ASC LIMIT 1',
       [userId, todayStart]
@@ -343,12 +358,15 @@ app.post('/api/work-sessions', async (req: Request, res: Response) => {
       const s = existing.rows[0];
       return res.json({ id: s.id, userId: s.user_id, timestamp: parseInt(s.timestamp) });
     }
+    
+    // Só criar sessão se for após 6h
     await pool.query(
       'INSERT INTO work_sessions (id, user_id, timestamp) VALUES ($1, $2, $3)',
       [id, userId, timestamp]
     );
     return res.json({ id, userId, timestamp });
   } catch (error) {
+    console.error('Error creating work session:', error);
     return res.status(500).json({ error: 'Erro ao criar sessão' });
   }
 });

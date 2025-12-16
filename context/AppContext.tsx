@@ -74,7 +74,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const saved = localStorage.getItem('currentUser');
       if (saved) {
         try {
-          return JSON.parse(saved);
+          const user = JSON.parse(saved);
+          // Verificar se é antes das 6h - desconectar se for
+          const now = new Date();
+          const currentHour = now.getHours();
+          if (currentHour < 6) {
+            localStorage.removeItem('currentUser');
+            localStorage.removeItem('loginTimestamp');
+            localStorage.removeItem('loginDate');
+            return null;
+          }
+          return user;
         } catch {
           return null;
         }
@@ -217,6 +227,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
       const loginTime = parseInt(loginTimestamp, 10);
       const currentTime = Date.now();
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // Verificar se é antes das 6h da manhã - desconectar todos
+      if (currentHour < 6) {
+        console.log('🔒 Auto-logout: Antes das 6h da manhã - desconectando todos');
+        setCurrentUser(null);
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('loginTimestamp');
+        localStorage.removeItem('loginDate');
+        return;
+      }
       
       // Verificar se mudou o dia (desconectar todos) - verificação mais robusta
       // Comparar datas normalizadas (sem hora) para detectar mudança de dia
@@ -231,7 +253,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const daysDifference = Math.floor((currentDateNormalized - loginDateNormalized) / (1000 * 60 * 60 * 24));
       
       if (daysDifference > 0 || loginDateObj.toDateString() !== currentDateObj.toDateString()) {
-        console.log('🔒 Auto-logout: Mudou o dia', { 
+        console.log('🔒 Auto-logout: Mudou o dia - desconectando todos', { 
           loginDate: loginDateObj.toLocaleDateString('pt-BR'),
           currentDate: currentDateObj.toLocaleDateString('pt-BR'),
           daysDifference 
@@ -306,6 +328,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const login = async (name: string, password: string): Promise<boolean> => {
     try {
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // Verificar se é antes das 6h - não permitir login
+      if (currentHour < 6) {
+        alert('Login só é permitido a partir das 6h da manhã. Todos os usuários são desconectados antes das 6h.');
+        return false;
+      }
+      
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -336,6 +367,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 const exists = prev.some(s => s.id === session.id);
                 return exists ? prev : [session, ...prev];
               });
+            }
+          } else {
+            // Se retornou erro, verificar se é porque é antes das 6h
+            const errorData = await sessionRes.json().catch(() => ({}));
+            if (errorData.code === 'BEFORE_6AM') {
+              alert('Registro de expediente só é permitido a partir das 6h da manhã.');
             }
           }
         } catch (e) {

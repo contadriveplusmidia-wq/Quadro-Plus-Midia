@@ -81,8 +81,16 @@ export const AdminHistory: React.FC = () => {
   const sessionRows = useMemo<WorkSessionRow[]>(() => {
     const { start, end } = getDateRange();
     
+    // Filtrar sessões e demandas do período
     let filteredSessions = workSessions.filter(s => s.timestamp >= start && s.timestamp <= end);
     let filteredDemands = demands.filter(d => d.timestamp >= start && d.timestamp <= end);
+    
+    // Filtrar apenas sessões após 6h da manhã
+    filteredSessions = filteredSessions.filter(session => {
+      const sessionDate = new Date(session.timestamp);
+      const sessionHour = sessionDate.getHours();
+      return sessionHour >= 6; // Só considerar sessões após 6h
+    });
     
     if (adminFilters.designerId !== 'all') {
       filteredSessions = filteredSessions.filter(s => s.userId === adminFilters.designerId);
@@ -108,9 +116,13 @@ export const AdminHistory: React.FC = () => {
       const nextDay = new Date(sessionDate);
       nextDay.setDate(nextDay.getDate() + 1);
 
+      // Filtrar demandas apenas após 6h do dia
+      const dayStart = new Date(sessionDate);
+      dayStart.setHours(6, 0, 0, 0); // Início do dia útil: 6h
+
       const dayDemands = filteredDemands.filter(d => 
         d.userId === session.userId && 
-        d.timestamp >= sessionDate.getTime() && 
+        d.timestamp >= dayStart.getTime() && 
         d.timestamp < nextDay.getTime()
       );
 
