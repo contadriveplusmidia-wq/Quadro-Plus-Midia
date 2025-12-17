@@ -1,7 +1,8 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
-import { Pool } from 'pg';
+// PostgreSQL (comentado para desenvolvimento local - usado apenas em produção/Vercel)
+// import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 
 const app = express();
@@ -12,40 +13,287 @@ app.use(express.json({ limit: '10mb' }));
 import dotenv from 'dotenv';
 dotenv.config();
 
-// Verificar se DATABASE_URL está configurada
-if (!process.env.DATABASE_URL) {
-  console.error('❌ ERRO: DATABASE_URL não está definida no arquivo .env');
-  process.exit(1);
+// ============ DETECÇÃO DE AMBIENTE ============
+// Determinar se estamos em desenvolvimento local (SQLite) ou produção (PostgreSQL/Neon)
+// FORÇAR SQLite em desenvolvimento local (NODE_ENV !== 'production' e não Vercel)
+const isVercel = process.env.VERCEL === '1';
+const isLocalDev = process.env.NODE_ENV !== 'production' && !isVercel;
+const useSQLite = isLocalDev; // Sempre usar SQLite em desenvolvimento local
+
+// ============ CONEXÃO SQLITE (LOCAL) ============
+import Database from 'better-sqlite3';
+import type { Database as DatabaseType } from 'better-sqlite3';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs';
+
+let db: DatabaseType | null = null;
+if (useSQLite) {
+  try {
+    // Obter diretório atual (ESModules)
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+    const dbPath = path.join(__dirname, '..', 'database.db');
+    
+    console.log('🔍 Tentando conectar SQLite...');
+    console.log('📁 Caminho do arquivo:', dbPath);
+    console.log('📁 Caminho absoluto:', path.resolve(dbPath));
+    
+    // Verificar se o arquivo existe
+    const exists = fs.existsSync(dbPath);
+    console.log('📄 Arquivo existe?', exists);
+    
+    if (!exists) {
+      console.warn('⚠️  Arquivo database.db não encontrado. Criando novo arquivo...');
+    }
+    
+    db = new Database(dbPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    console.log('✅ Conectado ao banco de dados SQLite (local):', dbPath);
+  } catch (err: any) {
+    console.error('❌ Erro ao conectar SQLite:', err);
+    console.error('❌ Detalhes do erro:', err.message);
+    console.error('❌ Stack:', err.stack);
+    process.exit(1);
+  }
+} else {
+  console.log('⚠️  SQLite desabilitado. useSQLite =', useSQLite, 'isVercel =', isVercel, 'NODE_ENV =', process.env.NODE_ENV);
 }
 
-// Verificar se não está tentando conectar em localhost (exceto em desenvolvimento local)
-if (process.env.DATABASE_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
-  console.warn('⚠️  AVISO: Tentando conectar em localhost em produção!');
+// ============ CONEXÃO POSTGRESQL (PRODUÇÃO) ============
+// Comentado para desenvolvimento local - descomentar apenas em produção/Vercel
+/*
+let pool: Pool | null = null;
+if (!useSQLite) {
+  // Verificar se DATABASE_URL está configurada
+  if (!process.env.DATABASE_URL) {
+    console.error('❌ ERRO: DATABASE_URL não está definida no arquivo .env');
+    process.exit(1);
+  }
+
+  // Verificar se não está tentando conectar em localhost (exceto em desenvolvimento local)
+  if (process.env.DATABASE_URL.includes('localhost') && process.env.NODE_ENV === 'production') {
+    console.warn('⚠️  AVISO: Tentando conectar em localhost em produção!');
+  }
+
+  // Configuração do pool de conexão
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    // Sempre usar SSL para Neon/Vercel (já vem na connection string, mas garantimos aqui também)
+    ssl: process.env.DATABASE_URL?.includes('neon') || process.env.DATABASE_URL?.includes('vercel') 
+      ? { rejectUnauthorized: false } 
+      : undefined
+  });
+
+  // Verificar conexão na inicialização
+  pool.on('connect', () => {
+    console.log('✅ Conectado ao banco de dados PostgreSQL');
+  });
+
+  pool.on('error', (err) => {
+    console.error('❌ Erro na conexão do banco de dados:', err);
+  });
 }
+*/
 
-const isProduction = process.env.DATABASE_URL?.includes('neon') || 
-                     process.env.DATABASE_URL?.includes('vercel') ||
-                     process.env.VERCEL === '1';
-
+const isProduction = !isLocalDev;
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
-// Configuração do pool de conexão
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  // Sempre usar SSL para Neon/Vercel (já vem na connection string, mas garantimos aqui também)
-  ssl: process.env.DATABASE_URL?.includes('neon') || process.env.DATABASE_URL?.includes('vercel') 
-    ? { rejectUnauthorized: false } 
-    : undefined
-});
+// ============ FUNÇÕES AUXILIARES PARA QUERIES ============
+// Abstração para executar queries tanto em SQLite quanto PostgreSQL
+// SQLite usa placeholders ? e PostgreSQL usa $1, $2, etc.
+function convertPlaceholders(sql: string): string {
+  if (useSQLite) {
+    // Converter $1, $2, etc para ? mantendo a ordem
+    // Substituir do maior para o menor para evitar conflitos (ex: $10 antes de $1)
+    let converted = sql;
+    const matches = sql.match(/\$(\d+)/g) || [];
+    if (matches.length > 0) {
+      const placeholders = [...new Set(matches)].map(m => parseInt(m.substring(1))).sort((a, b) => b - a);
+      for (const num of placeholders) {
+        converted = converted.replace(new RegExp(`\\$${num}\\b`, 'g'), '?');
+      }
+    }
+    return converted;
+  }
+  return sql;
+}
 
-// Verificar conexão na inicialização
-pool.on('connect', () => {
-  console.log('✅ Conectado ao banco de dados PostgreSQL');
-});
+function convertParams(params: any[]): any[] {
+  // SQLite e PostgreSQL aceitam arrays, mas SQLite precisa de valores convertidos
+  if (useSQLite) {
+    return params.map(p => {
+      // Converter undefined para null (SQLite não aceita undefined)
+      if (p === undefined) return null;
+      // Converter boolean para 0/1 se necessário
+      if (typeof p === 'boolean') return p ? 1 : 0;
+      return p;
+    });
+  }
+  return params;
+}
 
-pool.on('error', (err) => {
-  console.error('❌ Erro na conexão do banco de dados:', err);
-});
+// Função para executar query SELECT (retorna array de resultados)
+async function query(sql: string, params: any[] = []): Promise<any[]> {
+  if (useSQLite && db) {
+    const convertedSql = convertPlaceholders(sql);
+    const convertedParams = convertParams(params);
+    const stmt = db.prepare(convertedSql);
+    return stmt.all(...convertedParams);
+  }
+  // PostgreSQL (comentado para desenvolvimento local)
+  /*
+  if (pool) {
+    const result = await pool.query(sql, params);
+    return result.rows;
+  }
+  */
+  throw new Error('Nenhuma conexão de banco de dados disponível');
+}
+
+// Função para executar query que retorna uma única linha
+async function queryOne(sql: string, params: any[] = []): Promise<any | null> {
+  if (useSQLite && db) {
+    const convertedSql = convertPlaceholders(sql);
+    const convertedParams = convertParams(params);
+    const stmt = db.prepare(convertedSql);
+    return stmt.get(...convertedParams) || null;
+  }
+  // PostgreSQL (comentado para desenvolvimento local)
+  /*
+  if (pool) {
+    const result = await pool.query(sql, params);
+    return result.rows[0] || null;
+  }
+  */
+  throw new Error('Nenhuma conexão de banco de dados disponível');
+}
+
+// Função para executar query INSERT/UPDATE/DELETE (retorna informações de execução)
+async function execute(sql: string, params: any[] = []): Promise<any> {
+  if (useSQLite && db) {
+    const convertedSql = convertPlaceholders(sql);
+    const convertedParams = convertParams(params);
+    const stmt = db.prepare(convertedSql);
+    const result = stmt.run(...convertedParams);
+    return {
+      rowsAffected: result.changes,
+      lastInsertRowid: result.lastInsertRowid
+    };
+  }
+  // PostgreSQL (comentado para desenvolvimento local)
+  /*
+  if (pool) {
+    const result = await pool.query(sql, params);
+    return {
+      rowsAffected: result.rowCount || 0,
+      rows: result.rows
+    };
+  }
+  */
+  throw new Error('Nenhuma conexão de banco de dados disponível');
+}
+
+// Função para iniciar transação
+async function beginTransaction(): Promise<any> {
+  if (useSQLite && db) {
+    // SQLite não precisa de BEGIN explícito, mas podemos usar transação
+    return db.transaction(() => {});
+  }
+  // PostgreSQL (comentado para desenvolvimento local)
+  /*
+  if (pool) {
+    const client = await pool.connect();
+    await client.query('BEGIN');
+    return client;
+  }
+  */
+  throw new Error('Nenhuma conexão de banco de dados disponível');
+}
+
+// Função para commit de transação
+async function commitTransaction(client: any): Promise<void> {
+  if (useSQLite && db) {
+    // SQLite commit é automático, mas podemos chamar explicitamente
+    return;
+  }
+  // PostgreSQL (comentado para desenvolvimento local)
+  /*
+  if (client) {
+    await client.query('COMMIT');
+    client.release();
+  }
+  */
+}
+
+// Função para rollback de transação
+async function rollbackTransaction(client: any): Promise<void> {
+  if (useSQLite && db) {
+    // SQLite rollback é automático em caso de erro
+    return;
+  }
+  // PostgreSQL (comentado para desenvolvimento local)
+  /*
+  if (client) {
+    await client.query('ROLLBACK');
+    client.release();
+  }
+  */
+}
+
+// Função helper para executar transação SQLite
+function runTransaction(callback: (db: DatabaseType) => void): void {
+  if (useSQLite && db) {
+    db.transaction(callback)();
+  } else {
+    // PostgreSQL (comentado para desenvolvimento local)
+    /*
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await callback(client);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+    */
+  }
+}
+
+// ============ FUNÇÃO HELPER PARA CONVERTER CAMPOS NUMÉRICOS ============
+// SQLite retorna números como strings, então precisamos converter antes de enviar ao frontend
+function convertNumericFields(data: any, fields: string[]): any {
+  if (!data || typeof data !== 'object') return data;
+  
+  const converted = Array.isArray(data) ? [...data] : { ...data };
+  
+  for (const field of fields) {
+    if (converted[field] !== undefined && converted[field] !== null) {
+      const value = converted[field];
+      // Converter string numérica para number
+      if (typeof value === 'string' && value.trim() !== '') {
+        const num = Number(value);
+        if (!isNaN(num)) {
+          converted[field] = num;
+        }
+      } else if (typeof value === 'number') {
+        // Já é número, manter
+        converted[field] = value;
+      }
+    }
+  }
+  
+  return converted;
+}
+
+// Converter campos numéricos em array de objetos
+function convertNumericFieldsInArray(dataArray: any[], fields: string[]): any[] {
+  return dataArray.map(item => convertNumericFields(item, fields));
+}
 
 const hashPassword = async (password: string): Promise<string> => {
   const salt = await bcrypt.genSalt(10);
@@ -60,29 +308,53 @@ const comparePassword = async (password: string, hash: string): Promise<boolean>
 app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
     const { name, password } = req.body;
-    const result = await pool.query(
-      'SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = $1 AND active = true',
+    
+    // SQLite pode armazenar booleanos como 't'/'f' ou 1/0, então vamos usar uma query mais flexível
+    const users = await query(
+      useSQLite
+        ? "SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = ? AND (active = 1 OR active = 't' OR active = 'true')"
+        : 'SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = $1 AND active = true',
       [name]
     );
-    if (result.rows.length === 0) {
+    
+    if (users.length === 0) {
       return res.status(401).json({ error: 'Usuário não encontrado' });
     }
-    const user = result.rows[0];
+    const user = users[0];
     
     // Em desenvolvimento, permite login do admin com senha plain-text '123456'
     const devAdminBypass = isDevelopment && user.role === 'ADM' && password === '123456';
-    const isValidPassword = devAdminBypass || await comparePassword(password, user.password);
+    
+    let isValidPassword = false;
+    if (devAdminBypass) {
+      isValidPassword = true;
+      console.log('✅ Login via dev bypass (senha 123456)');
+    } else {
+      try {
+        isValidPassword = await comparePassword(password, user.password);
+        console.log('🔍 Comparação bcrypt:', isValidPassword ? '✅ Senha válida' : '❌ Senha inválida');
+      } catch (compareError) {
+        console.error('❌ Erro ao comparar senha:', compareError);
+        isValidPassword = false;
+      }
+    }
     
     if (!isValidPassword) {
+      console.log('❌ Login falhou para usuário:', name);
+      console.log('🔍 Dev bypass ativo?', devAdminBypass);
       return res.status(401).json({ error: 'Senha incorreta' });
     }
+    
+    // Converter active para boolean se necessário
+    const activeValue = user.active === 1 || user.active === 't' || user.active === 'true' || user.active === true;
+    
     return res.json({
       id: user.id,
       name: user.name,
       role: user.role,
       avatarUrl: user.avatar_url,
       avatarColor: user.avatar_color,
-      active: user.active
+      active: activeValue
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -98,18 +370,18 @@ app.put('/api/auth/change-password', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Dados incompletos' });
     }
     
-    const result = await pool.query('SELECT password FROM users WHERE id = $1', [userId]);
-    if (result.rows.length === 0) {
+    const user = await queryOne('SELECT password FROM users WHERE id = ?', [userId]);
+    if (!user) {
       return res.status(404).json({ error: 'Usuário não encontrado' });
     }
     
-    const isValidPassword = await comparePassword(oldPassword, result.rows[0].password);
+    const isValidPassword = await comparePassword(oldPassword, user.password);
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Senha atual incorreta' });
     }
     
     const hashedNewPassword = await hashPassword(newPassword);
-    await pool.query('UPDATE users SET password = $1 WHERE id = $2', [hashedNewPassword, userId]);
+    await execute('UPDATE users SET password = ? WHERE id = ?', [hashedNewPassword, userId]);
     
     return res.json({ success: true, message: 'Senha alterada com sucesso' });
   } catch (error) {
@@ -121,8 +393,8 @@ app.put('/api/auth/change-password', async (req: Request, res: Response) => {
 // ============ USERS ============
 app.get('/api/users', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT id, name, role, avatar_url, avatar_color, active FROM users ORDER BY name');
-    return res.json(result.rows.map(u => ({
+    const users = await query('SELECT id, name, role, avatar_url, avatar_color, active FROM users ORDER BY name');
+    return res.json(users.map(u => ({
       id: u.id,
       name: u.name,
       role: u.role,
@@ -137,10 +409,10 @@ app.get('/api/users', async (req: Request, res: Response) => {
 
 app.get('/api/users/designers', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(
+    const users = await query(
       "SELECT id, name, role, avatar_url, avatar_color, active FROM users WHERE role = 'DESIGNER' ORDER BY name"
     );
-    return res.json(result.rows.map(u => ({
+    return res.json(users.map(u => ({
       id: u.id,
       name: u.name,
       role: u.role,
@@ -158,8 +430,8 @@ app.post('/api/users', async (req: Request, res: Response) => {
     const { name, password, role, avatarColor } = req.body;
     const id = `user-${Date.now()}`;
     const hashedPassword = await hashPassword(password || '123');
-    await pool.query(
-      'INSERT INTO users (id, name, password, role, avatar_color, active) VALUES ($1, $2, $3, $4, $5, true)',
+    await execute(
+      'INSERT INTO users (id, name, password, role, avatar_color, active) VALUES (?, ?, ?, ?, ?, 1)',
       [id, name, hashedPassword, role || 'DESIGNER', avatarColor]
     );
     return res.json({ id, name, role: role || 'DESIGNER', avatarColor, active: true });
@@ -173,10 +445,36 @@ app.put('/api/users/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { name, password, active, avatarColor } = req.body;
     const hashedPassword = password ? await hashPassword(password) : null;
-    await pool.query(
-      'UPDATE users SET name = COALESCE($1, name), password = COALESCE($2, password), active = COALESCE($3, active), avatar_color = COALESCE($4, avatar_color) WHERE id = $5',
-      [name, hashedPassword, active, avatarColor, id]
-    );
+    
+    // SQLite não tem COALESCE da mesma forma, então vamos construir a query dinamicamente
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (name !== undefined) {
+      updates.push('name = ?');
+      params.push(name);
+    }
+    if (hashedPassword !== null) {
+      updates.push('password = ?');
+      params.push(hashedPassword);
+    }
+    if (active !== undefined) {
+      updates.push('active = ?');
+      params.push(active ? 1 : 0);
+    }
+    if (avatarColor !== undefined) {
+      updates.push('avatar_color = ?');
+      params.push(avatarColor);
+    }
+    
+    if (updates.length > 0) {
+      params.push(id);
+      await execute(
+        `UPDATE users SET ${updates.join(', ')} WHERE id = ?`,
+        params
+      );
+    }
+    
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao atualizar usuário' });
@@ -184,56 +482,72 @@ app.put('/api/users/:id', async (req: Request, res: Response) => {
 });
 
 app.delete('/api/users/:id', async (req: Request, res: Response) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     
-    await client.query('BEGIN');
-    
-    // CASCADE DELETE: Remove todos os registros vinculados ao usuário
-    // 1. Remover demand_items (via demands do usuário)
-    await client.query(`
-      DELETE FROM demand_items 
-      WHERE demand_id IN (SELECT id FROM demands WHERE user_id = $1)
-    `, [id]);
-    
-    // 2. Remover demands do usuário
-    await client.query('DELETE FROM demands WHERE user_id = $1', [id]);
-    
-    // 3. Remover work_sessions do usuário
-    await client.query('DELETE FROM work_sessions WHERE user_id = $1', [id]);
-    
-    // 4. Remover feedbacks onde o usuário é o designer
-    await client.query('DELETE FROM feedbacks WHERE designer_id = $1', [id]);
-    
-    // 5. Remover lesson_progress do usuário
-    await client.query('DELETE FROM lesson_progress WHERE designer_id = $1', [id]);
-    
-    // 6. Finalmente, deletar o próprio usuário
-    await client.query('DELETE FROM users WHERE id = $1', [id]);
-    
-    await client.query('COMMIT');
+    // SQLite suporta transações via db.transaction (síncrono)
+    if (useSQLite && db) {
+      const transaction = db.transaction(() => {
+        // 1. Remover demand_items (via demands do usuário)
+        db.prepare('DELETE FROM demand_items WHERE demand_id IN (SELECT id FROM demands WHERE user_id = ?)').run(id);
+        
+        // 2. Remover demands do usuário
+        db.prepare('DELETE FROM demands WHERE user_id = ?').run(id);
+        
+        // 3. Remover work_sessions do usuário
+        db.prepare('DELETE FROM work_sessions WHERE user_id = ?').run(id);
+        
+        // 4. Remover feedbacks onde o usuário é o designer
+        db.prepare('DELETE FROM feedbacks WHERE designer_id = ?').run(id);
+        
+        // 5. Remover lesson_progress do usuário
+        db.prepare('DELETE FROM lesson_progress WHERE designer_id = ?').run(id);
+        
+        // 6. Finalmente, deletar o próprio usuário
+        db.prepare('DELETE FROM users WHERE id = ?').run(id);
+      });
+      
+      transaction();
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM demand_items WHERE demand_id IN (SELECT id FROM demands WHERE user_id = $1)', [id]);
+        await client.query('DELETE FROM demands WHERE user_id = $1', [id]);
+        await client.query('DELETE FROM work_sessions WHERE user_id = $1', [id]);
+        await client.query('DELETE FROM feedbacks WHERE designer_id = $1', [id]);
+        await client.query('DELETE FROM lesson_progress WHERE designer_id = $1', [id]);
+        await client.query('DELETE FROM users WHERE id = $1', [id]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      */
+    }
     
     return res.json({ success: true });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('Delete user error:', error);
     return res.status(500).json({ error: 'Erro ao remover usuário' });
-  } finally {
-    client.release();
   }
 });
 
 // ============ ART TYPES ============
 app.get('/api/art-types', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM art_types ORDER BY sort_order');
-    return res.json(result.rows.map(a => ({
+    const arts = await query('SELECT * FROM art_types ORDER BY sort_order');
+    const converted = convertNumericFieldsInArray(arts.map(a => ({
       id: a.id,
       label: a.label,
       points: a.points,
       order: a.sort_order
-    })));
+    })), ['points', 'order']);
+    return res.json(converted);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar tipos de arte' });
   }
@@ -243,33 +557,49 @@ app.post('/api/art-types', async (req: Request, res: Response) => {
   try {
     const { label, points } = req.body;
     const id = `art-${Date.now()}`;
-    const maxOrder = await pool.query('SELECT COALESCE(MAX(sort_order), -1) + 1 as next FROM art_types');
-    const order = maxOrder.rows[0].next;
-    await pool.query(
-      'INSERT INTO art_types (id, label, points, sort_order) VALUES ($1, $2, $3, $4)',
+    const maxOrderResult = await queryOne('SELECT COALESCE(MAX(sort_order), -1) + 1 as next FROM art_types');
+    const order = Number(maxOrderResult?.next || 0);
+    await execute(
+      'INSERT INTO art_types (id, label, points, sort_order) VALUES (?, ?, ?, ?)',
       [id, label, points, order]
     );
-    return res.json({ id, label, points, order });
+    return res.json(convertNumericFields({ id, label, points, order }, ['points', 'order']));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao criar tipo de arte' });
   }
 });
 
 app.put('/api/art-types/reorder', async (req: Request, res: Response) => {
-  const client = await pool.connect();
   try {
     const { artTypes } = req.body;
-    await client.query('BEGIN');
-    for (const art of artTypes) {
-      await client.query('UPDATE art_types SET sort_order = $1 WHERE id = $2', [art.order, art.id]);
+    if (useSQLite && db) {
+      const transaction = db.transaction(() => {
+        for (const art of artTypes) {
+          db.prepare('UPDATE art_types SET sort_order = ? WHERE id = ?').run(art.order, art.id);
+        }
+      });
+      transaction();
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const art of artTypes) {
+          await client.query('UPDATE art_types SET sort_order = $1 WHERE id = $2', [art.order, art.id]);
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      */
     }
-    await client.query('COMMIT');
     return res.json({ success: true });
   } catch (error) {
-    await client.query('ROLLBACK');
     return res.status(500).json({ error: 'Erro ao reordenar' });
-  } finally {
-    client.release();
   }
 });
 
@@ -277,10 +607,32 @@ app.put('/api/art-types/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { label, points, order } = req.body;
-    await pool.query(
-      'UPDATE art_types SET label = COALESCE($1, label), points = COALESCE($2, points), sort_order = COALESCE($3, sort_order) WHERE id = $4',
-      [label, points, order, id]
-    );
+    
+    // Construir query dinamicamente para SQLite
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (label !== undefined) {
+      updates.push('label = ?');
+      params.push(label);
+    }
+    if (points !== undefined) {
+      updates.push('points = ?');
+      params.push(points);
+    }
+    if (order !== undefined) {
+      updates.push('sort_order = ?');
+      params.push(order);
+    }
+    
+    if (updates.length > 0) {
+      params.push(id);
+      await execute(
+        `UPDATE art_types SET ${updates.join(', ')} WHERE id = ?`,
+        params
+      );
+    }
+    
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao atualizar tipo de arte' });
@@ -290,7 +642,7 @@ app.put('/api/art-types/:id', async (req: Request, res: Response) => {
 app.delete('/api/art-types/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM art_types WHERE id = $1', [id]);
+    await execute('DELETE FROM art_types WHERE id = ?', [id]);
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao remover tipo de arte' });
@@ -301,27 +653,27 @@ app.delete('/api/art-types/:id', async (req: Request, res: Response) => {
 app.get('/api/work-sessions', async (req: Request, res: Response) => {
   try {
     const { userId, startDate, endDate } = req.query;
-    let query = 'SELECT * FROM work_sessions WHERE 1=1';
+    let sql = 'SELECT * FROM work_sessions WHERE 1=1';
     const params: any[] = [];
     if (userId) {
       params.push(userId);
-      query += ` AND user_id = $${params.length}`;
+      sql += useSQLite ? ' AND user_id = ?' : ` AND user_id = $${params.length}`;
     }
     if (startDate) {
       params.push(parseInt(startDate as string));
-      query += ` AND timestamp >= $${params.length}`;
+      sql += useSQLite ? ' AND timestamp >= ?' : ` AND timestamp >= $${params.length}`;
     }
     if (endDate) {
       params.push(parseInt(endDate as string));
-      query += ` AND timestamp <= $${params.length}`;
+      sql += useSQLite ? ' AND timestamp <= ?' : ` AND timestamp <= $${params.length}`;
     }
-    query += ' ORDER BY timestamp DESC';
-    const result = await pool.query(query, params);
-    return res.json(result.rows.map(s => ({
+    sql += ' ORDER BY timestamp DESC';
+    const sessions = await query(sql, params);
+    return res.json(convertNumericFieldsInArray(sessions.map(s => ({
       id: s.id,
       userId: s.user_id,
-      timestamp: parseInt(s.timestamp)
-    })));
+      timestamp: s.timestamp
+    })), ['timestamp']));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar sessões' });
   }
@@ -350,21 +702,25 @@ app.post('/api/work-sessions', async (req: Request, res: Response) => {
     const todayStart = today.getTime();
     
     // Verificar se já existe sessão hoje (após 6h)
-    const existing = await pool.query(
-      'SELECT * FROM work_sessions WHERE user_id = $1 AND timestamp >= $2 ORDER BY timestamp ASC LIMIT 1',
+    const existing = await query(
+      useSQLite 
+        ? 'SELECT * FROM work_sessions WHERE user_id = ? AND timestamp >= ? ORDER BY timestamp ASC LIMIT 1'
+        : 'SELECT * FROM work_sessions WHERE user_id = $1 AND timestamp >= $2 ORDER BY timestamp ASC LIMIT 1',
       [userId, todayStart]
     );
-    if (existing.rows.length > 0) {
-      const s = existing.rows[0];
+    if (existing.length > 0) {
+      const s = existing[0];
       return res.json({ id: s.id, userId: s.user_id, timestamp: parseInt(s.timestamp) });
     }
     
     // Só criar sessão se for após 6h
-    await pool.query(
-      'INSERT INTO work_sessions (id, user_id, timestamp) VALUES ($1, $2, $3)',
+    await execute(
+      useSQLite
+        ? 'INSERT INTO work_sessions (id, user_id, timestamp) VALUES (?, ?, ?)'
+        : 'INSERT INTO work_sessions (id, user_id, timestamp) VALUES ($1, $2, $3)',
       [id, userId, timestamp]
     );
-    return res.json({ id, userId, timestamp });
+    return res.json(convertNumericFields({ id, userId, timestamp }, ['timestamp']));
   } catch (error) {
     console.error('Error creating work session:', error);
     return res.status(500).json({ error: 'Erro ao criar sessão' });
@@ -376,7 +732,7 @@ app.post('/api/work-sessions', async (req: Request, res: Response) => {
 // Função para gerar código de execução baseado no dia da semana e ordem
 // Contagem: POR DESIGNER (cada designer tem sua própria sequência)
 // Horário: 00:00-23:59 (dia calendário)
-async function generateExecutionCode(pool: Pool, timestamp: number, userId: string, excludeDemandId?: string): Promise<string> {
+async function generateExecutionCode(timestamp: number, userId: string, excludeDemandId?: string): Promise<string> {
   const date = new Date(timestamp);
   const dayOfWeek = date.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
   
@@ -414,19 +770,21 @@ async function generateExecutionCode(pool: Pool, timestamp: number, userId: stri
   // - Apenas do dia atual (startTs até endTs)
   // - Apenas do designer específico (user_id = userId)
   // - Criadas antes da atual (timestamp < currentTs)
-  let countQuery = 'SELECT COUNT(*) as count FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND timestamp < $3 AND user_id = $4';
+  let countQuery = useSQLite
+    ? 'SELECT COUNT(*) as count FROM demands WHERE timestamp >= ? AND timestamp <= ? AND timestamp < ? AND user_id = ?'
+    : 'SELECT COUNT(*) as count FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND timestamp < $3 AND user_id = $4';
   const countParams: any[] = [startTs, endTimestamp, currentTs, userId];
   
   if (excludeDemandId) {
-    countQuery += ' AND id != $5';
+    countQuery += useSQLite ? ' AND id != ?' : ' AND id != $5';
     countParams.push(excludeDemandId);
   }
   
   // Debug: verificar o que está sendo contado
   const debugQuery = countQuery.replace('COUNT(*) as count', 'id, timestamp, execution_code, user_id');
   try {
-    const debugResult = await pool.query(debugQuery, countParams);
-    console.log('[EXECUTION CODE] Debug - Demandas do DESIGNER no DIA ATUAL:', debugResult.rows.length, {
+    const debugResult = await query(debugQuery, countParams);
+    console.log('[EXECUTION CODE] Debug - Demandas do DESIGNER no DIA ATUAL:', debugResult.length, {
       userId,
       dia: date.toLocaleDateString('pt-BR'),
       startTimestamp: startTs,
@@ -435,7 +793,7 @@ async function generateExecutionCode(pool: Pool, timestamp: number, userId: stri
       dateStart: new Date(startTs).toISOString(),
       dateEnd: new Date(endTimestamp).toISOString(),
       dateCurrent: new Date(currentTs).toISOString(),
-      demands: debugResult.rows.map((r: any) => ({
+      demands: debugResult.map((r: any) => ({
         id: r.id,
         userId: r.user_id,
         timestamp: r.timestamp,
@@ -447,8 +805,8 @@ async function generateExecutionCode(pool: Pool, timestamp: number, userId: stri
     console.warn('[EXECUTION CODE] Erro no debug:', debugError);
   }
   
-  const countResult = await pool.query(countQuery, countParams);
-  const totalDemandsBeforeThis = parseInt(countResult.rows[0]?.count || '0', 10) || 0;
+  const countResult = await queryOne(countQuery, countParams);
+  const totalDemandsBeforeThis = parseInt(countResult?.count || '0', 10) || 0;
   const orderInDay = totalDemandsBeforeThis + 1;
   
   // Gerar código no formato {CODIGO_DO_DIA}{ORDEM_DA_DEMANDA}
@@ -469,7 +827,7 @@ async function generateExecutionCode(pool: Pool, timestamp: number, userId: stri
 
 // Função para reordenar códigos após exclusão
 // Reordena todas as demandas do designer no dia baseado na ordem de timestamp
-async function reorderExecutionCodes(pool: Pool, deletedTimestamp: number, userId: string) {
+async function reorderExecutionCodes(deletedTimestamp: number, userId: string) {
   const date = new Date(deletedTimestamp);
   
   // Calcular início e fim do dia (garantir apenas do dia específico)
@@ -481,77 +839,96 @@ async function reorderExecutionCodes(pool: Pool, deletedTimestamp: number, userI
   
   // Buscar todas as demandas do DESIGNER no dia ordenadas por timestamp (ordem de criação)
   // IMPORTANTE: Apenas do dia específico E apenas do designer específico
-  const demandsResult = await pool.query(
-    'SELECT id, timestamp FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND user_id = $3 ORDER BY timestamp ASC',
+  const demandsResult = await query(
+    useSQLite
+      ? 'SELECT id, timestamp FROM demands WHERE timestamp >= ? AND timestamp <= ? AND user_id = ? ORDER BY timestamp ASC'
+      : 'SELECT id, timestamp FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND user_id = $3 ORDER BY timestamp ASC',
     [startTimestamp, endTimestamp, userId]
   );
   
-  console.log('[REORDER] Reordenando códigos para', demandsResult.rows.length, 'demandas do designer', userId, 'no dia', date.toLocaleDateString('pt-BR'));
+  console.log('[REORDER] Reordenando códigos para', demandsResult.length, 'demandas do designer', userId, 'no dia', date.toLocaleDateString('pt-BR'));
   
   // Reordenar códigos baseado na ordem de timestamp
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    
-    // Reordenar códigos baseado na ordem de timestamp (ordem de criação)
-    for (let i = 0; i < demandsResult.rows.length; i++) {
-      const demand = demandsResult.rows[i];
-      const demandTimestamp = parseInt(demand.timestamp);
-      
-      // Obter código do dia
-      const dayOfWeek = new Date(demandTimestamp).getDay();
-      const dayCodes: { [key: number]: string } = {
-        0: 'D', 1: 'S', 2: 'T', 3: 'QA', 4: 'QI', 5: 'SX', 6: 'SB'
-      };
-      const dayCode = dayCodes[dayOfWeek];
-      
-      // Gerar código baseado na posição na ordem (i + 1)
-      // A ordem já está correta porque a query ordena por timestamp ASC
-      const correctCode = `${dayCode}${i + 1}`;
-      
-      await client.query(
-        'UPDATE demands SET execution_code = $1 WHERE id = $2',
-        [correctCode, demand.id]
-      );
+  if (useSQLite && db) {
+    const transaction = db.transaction(() => {
+      // Reordenar códigos baseado na ordem de timestamp (ordem de criação)
+      for (let i = 0; i < demandsResult.length; i++) {
+        const demand = demandsResult[i];
+        const demandTimestamp = parseInt(demand.timestamp);
+        
+        // Obter código do dia
+        const dayOfWeek = new Date(demandTimestamp).getDay();
+        const dayCodes: { [key: number]: string } = {
+          0: 'D', 1: 'S', 2: 'T', 3: 'QA', 4: 'QI', 5: 'SX', 6: 'SB'
+        };
+        const dayCode = dayCodes[dayOfWeek];
+        
+        // Gerar código baseado na posição na ordem (i + 1)
+        // A ordem já está correta porque a query ordena por timestamp ASC
+        const correctCode = `${dayCode}${i + 1}`;
+        
+        db.prepare('UPDATE demands SET execution_code = ? WHERE id = ?').run(correctCode, demand.id);
+      }
+    });
+    transaction();
+    console.log('[EXECUTION CODE] Códigos reordenados para', demandsResult.length, 'demandas do designer', userId);
+  } else {
+    // PostgreSQL (comentado para desenvolvimento local)
+    /*
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (let i = 0; i < demandsResult.length; i++) {
+        const demand = demandsResult[i];
+        const demandTimestamp = parseInt(demand.timestamp);
+        const dayOfWeek = new Date(demandTimestamp).getDay();
+        const dayCodes: { [key: number]: string } = {
+          0: 'D', 1: 'S', 2: 'T', 3: 'QA', 4: 'QI', 5: 'SX', 6: 'SB'
+        };
+        const dayCode = dayCodes[dayOfWeek];
+        const correctCode = `${dayCode}${i + 1}`;
+        await client.query('UPDATE demands SET execution_code = $1 WHERE id = $2', [correctCode, demand.id]);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-    
-    await client.query('COMMIT');
-    console.log('[EXECUTION CODE] Códigos reordenados para', demandsResult.rows.length, 'demandas do designer', userId);
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('[EXECUTION CODE] Erro ao reordenar códigos:', error);
-    throw error;
-  } finally {
-    client.release();
+    */
   }
 }
 
 app.get('/api/demands', async (req: Request, res: Response) => {
   try {
     const { userId, startDate, endDate } = req.query;
-    let query = 'SELECT * FROM demands WHERE 1=1';
+    let sql = 'SELECT * FROM demands WHERE 1=1';
     const params: any[] = [];
     if (userId) {
       params.push(userId);
-      query += ` AND user_id = $${params.length}`;
+      sql += useSQLite ? ' AND user_id = ?' : ` AND user_id = $${params.length}`;
     }
     if (startDate) {
       params.push(parseInt(startDate as string));
-      query += ` AND timestamp >= $${params.length}`;
+      sql += useSQLite ? ' AND timestamp >= ?' : ` AND timestamp >= $${params.length}`;
     }
     if (endDate) {
       params.push(parseInt(endDate as string));
-      query += ` AND timestamp <= $${params.length}`;
+      sql += useSQLite ? ' AND timestamp <= ?' : ` AND timestamp <= $${params.length}`;
     }
-    query += ' ORDER BY timestamp DESC';
-    const result = await pool.query(query, params);
-    const demands = await Promise.all(result.rows.map(async (d) => {
-      const itemsResult = await pool.query('SELECT * FROM demand_items WHERE demand_id = $1', [d.id]);
-      return {
+    sql += ' ORDER BY timestamp DESC';
+    const demandsData = await query(sql, params);
+    const demands = await Promise.all(demandsData.map(async (d) => {
+      const itemsResult = await query(
+        useSQLite ? 'SELECT * FROM demand_items WHERE demand_id = ?' : 'SELECT * FROM demand_items WHERE demand_id = $1',
+        [d.id]
+      );
+      const demand = {
         id: d.id,
         userId: d.user_id,
         userName: d.user_name,
-        items: itemsResult.rows.map(i => ({
+        items: itemsResult.map(i => convertNumericFields({
           artTypeId: i.art_type_id,
           artTypeLabel: i.art_type_label,
           pointsPerUnit: i.points_per_unit,
@@ -559,12 +936,13 @@ app.get('/api/demands', async (req: Request, res: Response) => {
           variationQuantity: i.variation_quantity,
           variationPoints: i.variation_points,
           totalPoints: i.total_points
-        })),
+        }, ['pointsPerUnit', 'quantity', 'variationQuantity', 'variationPoints', 'totalPoints'])),
         totalQuantity: d.total_quantity,
         totalPoints: d.total_points,
-        timestamp: parseInt(d.timestamp),
+        timestamp: d.timestamp,
         executionCode: d.execution_code || undefined
       };
+      return convertNumericFields(demand, ['totalQuantity', 'totalPoints', 'timestamp']);
     }));
     return res.json(demands);
   } catch (error) {
@@ -574,7 +952,6 @@ app.get('/api/demands', async (req: Request, res: Response) => {
 });
 
 app.post('/api/demands', async (req: Request, res: Response) => {
-  const client = await pool.connect();
   try {
     const { userId, userName, items, totalQuantity, totalPoints } = req.body;
     const id = `demand-${Date.now()}`;
@@ -584,62 +961,95 @@ app.post('/api/demands', async (req: Request, res: Response) => {
     // IMPORTANTE: Passar userId para contar apenas demandas deste designer
     let executionCode: string | null = null;
     try {
-      executionCode = await generateExecutionCode(pool, timestamp, userId);
+      executionCode = await generateExecutionCode(timestamp, userId);
     } catch (codeError: any) {
       console.warn('[CREATE DEMAND] Erro ao gerar código de execução:', codeError?.message);
       // Continuar sem código se houver erro
     }
     
-    await client.query('BEGIN');
-    
-    // Inserir demanda com código de execução (se existir)
-    try {
-      if (executionCode) {
-        await client.query(
-          'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp, execution_code) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-          [id, userId, userName, totalQuantity, totalPoints, timestamp, executionCode]
-        );
-      } else {
-        // Se não conseguiu gerar código, inserir sem ele
-        await client.query(
-          'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
-          [id, userId, userName, totalQuantity, totalPoints, timestamp]
-        );
+    if (useSQLite && db) {
+      const transaction = db.transaction(() => {
+        // Inserir demanda com código de execução (se existir)
+        try {
+          if (executionCode) {
+            db.prepare(
+              'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp, execution_code) VALUES (?, ?, ?, ?, ?, ?, ?)'
+            ).run(id, userId, userName, totalQuantity, totalPoints, timestamp, executionCode);
+          } else {
+            db.prepare(
+              'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES (?, ?, ?, ?, ?, ?)'
+            ).run(id, userId, userName, totalQuantity, totalPoints, timestamp);
+          }
+        } catch (insertError: any) {
+          // Se a coluna execution_code não existir, inserir sem ela
+          if (insertError?.message?.includes('no such column: execution_code')) {
+            console.warn('[CREATE DEMAND] Coluna execution_code não existe, inserindo sem código');
+            db.prepare(
+              'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES (?, ?, ?, ?, ?, ?)'
+            ).run(id, userId, userName, totalQuantity, totalPoints, timestamp);
+            executionCode = null;
+          } else {
+            throw insertError;
+          }
+        }
+        
+        for (const item of items) {
+          db.prepare(
+            'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).run(id, item.artTypeId, item.artTypeLabel, item.pointsPerUnit, item.quantity, item.variationQuantity || 0, item.variationPoints || 0, item.totalPoints);
+        }
+      });
+      transaction();
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        if (executionCode) {
+          await client.query(
+            'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp, execution_code) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+            [id, userId, userName, totalQuantity, totalPoints, timestamp, executionCode]
+          );
+        } else {
+          await client.query(
+            'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
+            [id, userId, userName, totalQuantity, totalPoints, timestamp]
+          );
+        }
+        for (const item of items) {
+          await client.query(
+            'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [id, item.artTypeId, item.artTypeLabel, item.pointsPerUnit, item.quantity, item.variationQuantity || 0, item.variationPoints || 0, item.totalPoints]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-    } catch (insertError: any) {
-      // Se a coluna execution_code não existir, inserir sem ela
-      if (insertError?.code === '42703' || insertError?.message?.includes('column "execution_code" does not exist')) {
-        console.warn('[CREATE DEMAND] Coluna execution_code não existe, inserindo sem código');
-        await client.query(
-          'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
-          [id, userId, userName, totalQuantity, totalPoints, timestamp]
-        );
-        executionCode = null;
-      } else {
-        throw insertError;
-      }
+      */
     }
     
-    for (const item of items) {
-      await client.query(
-        'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-        [id, item.artTypeId, item.artTypeLabel, item.pointsPerUnit, item.quantity, item.variationQuantity || 0, item.variationPoints || 0, item.totalPoints]
-      );
-    }
-    await client.query('COMMIT');
-    
-    const response: any = { id, userId, userName, items, totalQuantity, totalPoints, timestamp };
+    const response: any = { 
+      id, 
+      userId, 
+      userName, 
+      items: items.map((item: any) => convertNumericFields(item, ['pointsPerUnit', 'quantity', 'variationQuantity', 'variationPoints', 'totalPoints'])), 
+      totalQuantity, 
+      totalPoints, 
+      timestamp 
+    };
     if (executionCode) {
       response.executionCode = executionCode;
     }
     
-    return res.json(response);
+    return res.json(convertNumericFields(response, ['totalQuantity', 'totalPoints', 'timestamp']));
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('[CREATE DEMAND] Erro:', error);
     return res.status(500).json({ error: 'Erro ao criar demanda' });
-  } finally {
-    client.release();
   }
 });
 
@@ -783,28 +1193,34 @@ app.delete('/api/demands/:id', async (req: Request, res: Response) => {
 app.get('/api/feedbacks', async (req: Request, res: Response) => {
   try {
     const { designerId } = req.query;
-    let query = 'SELECT * FROM feedbacks';
+    let sql = 'SELECT * FROM feedbacks';
     const params: any[] = [];
     if (designerId) {
       params.push(designerId);
-      query += ` WHERE designer_id = $${params.length}`;
+      sql += useSQLite ? ' WHERE designer_id = ?' : ` WHERE designer_id = $${params.length}`;
     }
-    query += ' ORDER BY created_at DESC';
-    const result = await pool.query(query, params);
-    return res.json(result.rows.map(f => ({
+    sql += ' ORDER BY created_at DESC';
+    const feedbacks = await query(sql, params);
+    const converted = convertNumericFieldsInArray(feedbacks.map(f => ({
       id: f.id,
       designerId: f.designer_id,
       designerName: f.designer_name,
       adminName: f.admin_name,
       imageUrls: f.image_urls || [],
       comment: f.comment,
-      createdAt: parseInt(f.created_at),
+      createdAt: f.created_at,
       viewed: f.viewed,
-      viewedAt: f.viewed_at ? parseInt(f.viewed_at) : undefined,
+      viewedAt: f.viewed_at || undefined,
       response: f.response || undefined,
-      responseAt: f.response_at ? parseInt(f.response_at) : undefined
-    })));
-  } catch (error) {
+      responseAt: f.response_at || undefined
+    })), ['createdAt', 'viewedAt', 'responseAt']);
+    return res.json(converted);
+  } catch (error: any) {
+    // Se a tabela não existe, retornar array vazio
+    if (error.message?.includes('no such table') || error.code === '42P01') {
+      return res.json([]);
+    }
+    console.error('Erro ao buscar feedbacks:', error);
     return res.status(500).json({ error: 'Erro ao buscar feedbacks' });
   }
 });
@@ -814,11 +1230,13 @@ app.post('/api/feedbacks', async (req: Request, res: Response) => {
     const { designerId, designerName, adminName, imageUrls, comment } = req.body;
     const id = `feedback-${Date.now()}`;
     const createdAt = Date.now();
-    await pool.query(
-      'INSERT INTO feedbacks (id, designer_id, designer_name, admin_name, image_urls, comment, created_at, viewed) VALUES ($1, $2, $3, $4, $5, $6, $7, false)',
+    await execute(
+      useSQLite
+        ? 'INSERT INTO feedbacks (id, designer_id, designer_name, admin_name, image_urls, comment, created_at, viewed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
+        : 'INSERT INTO feedbacks (id, designer_id, designer_name, admin_name, image_urls, comment, created_at, viewed) VALUES ($1, $2, $3, $4, $5, $6, $7, false)',
       [id, designerId, designerName, adminName, imageUrls || [], comment, createdAt]
     );
-    return res.json({ id, designerId, designerName, adminName, imageUrls, comment, createdAt, viewed: false });
+    return res.json(convertNumericFields({ id, designerId, designerName, adminName, imageUrls, comment, createdAt, viewed: false }, ['createdAt']));
   } catch (error) {
     console.error(error);
     return res.status(500).json({ error: 'Erro ao criar feedback' });
@@ -829,8 +1247,10 @@ app.put('/api/feedbacks/:id/view', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const viewedAt = Date.now();
-    await pool.query(
-      'UPDATE feedbacks SET viewed = true, viewed_at = $1 WHERE id = $2',
+    await execute(
+      useSQLite
+        ? 'UPDATE feedbacks SET viewed = 1, viewed_at = ? WHERE id = ?'
+        : 'UPDATE feedbacks SET viewed = true, viewed_at = $1 WHERE id = $2',
       [viewedAt, id]
     );
     return res.json({ success: true });
@@ -844,8 +1264,10 @@ app.put('/api/feedbacks/:id/response', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { response } = req.body;
     const responseAt = Date.now();
-    await pool.query(
-      'UPDATE feedbacks SET response = $1, response_at = $2 WHERE id = $3',
+    await execute(
+      useSQLite
+        ? 'UPDATE feedbacks SET response = ?, response_at = ? WHERE id = ?'
+        : 'UPDATE feedbacks SET response = $1, response_at = $2 WHERE id = $3',
       [response, responseAt, id]
     );
     return res.json({ success: true });
@@ -858,7 +1280,10 @@ app.put('/api/feedbacks/:id/response', async (req: Request, res: Response) => {
 app.delete('/api/feedbacks/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM feedbacks WHERE id = $1', [id]);
+    await execute(
+      useSQLite ? 'DELETE FROM feedbacks WHERE id = ?' : 'DELETE FROM feedbacks WHERE id = $1',
+      [id]
+    );
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao remover feedback' });
@@ -868,15 +1293,16 @@ app.delete('/api/feedbacks/:id', async (req: Request, res: Response) => {
 // ============ LESSONS ============
 app.get('/api/lessons', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM lessons ORDER BY order_index');
-    return res.json(result.rows.map(l => ({
+    const lessons = await query('SELECT * FROM lessons ORDER BY order_index');
+    const converted = convertNumericFieldsInArray(lessons.map(l => ({
       id: l.id,
       title: l.title,
       description: l.description,
       videoUrl: l.video_url,
       orderIndex: l.order_index,
-      createdAt: parseInt(l.created_at)
-    })));
+      createdAt: l.created_at
+    })), ['orderIndex', 'createdAt']);
+    return res.json(converted);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar aulas' });
   }
@@ -887,13 +1313,15 @@ app.post('/api/lessons', async (req: Request, res: Response) => {
     const { title, description, videoUrl } = req.body;
     const id = `lesson-${Date.now()}`;
     const createdAt = Date.now();
-    const maxOrder = await pool.query('SELECT COALESCE(MAX(order_index), -1) + 1 as next FROM lessons');
-    const orderIndex = maxOrder.rows[0].next;
-    await pool.query(
-      'INSERT INTO lessons (id, title, description, video_url, order_index, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
+    const maxOrderResult = await queryOne('SELECT COALESCE(MAX(order_index), -1) + 1 as next FROM lessons');
+    const orderIndex = Number(maxOrderResult?.next || 0);
+    await execute(
+      useSQLite
+        ? 'INSERT INTO lessons (id, title, description, video_url, order_index, created_at) VALUES (?, ?, ?, ?, ?, ?)'
+        : 'INSERT INTO lessons (id, title, description, video_url, order_index, created_at) VALUES ($1, $2, $3, $4, $5, $6)',
       [id, title, description || '', videoUrl, orderIndex, createdAt]
     );
-    return res.json({ id, title, description, videoUrl, orderIndex, createdAt });
+    return res.json(convertNumericFields({ id, title, description, videoUrl, orderIndex, createdAt }, ['orderIndex', 'createdAt']));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao criar aula' });
   }
@@ -903,10 +1331,36 @@ app.put('/api/lessons/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { title, description, videoUrl, orderIndex } = req.body;
-    await pool.query(
-      'UPDATE lessons SET title = COALESCE($1, title), description = COALESCE($2, description), video_url = COALESCE($3, video_url), order_index = COALESCE($4, order_index) WHERE id = $5',
-      [title, description, videoUrl, orderIndex, id]
-    );
+    
+    // Construir query dinamicamente para SQLite
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (title !== undefined) {
+      updates.push('title = ?');
+      params.push(title);
+    }
+    if (description !== undefined) {
+      updates.push('description = ?');
+      params.push(description);
+    }
+    if (videoUrl !== undefined) {
+      updates.push('video_url = ?');
+      params.push(videoUrl);
+    }
+    if (orderIndex !== undefined) {
+      updates.push('order_index = ?');
+      params.push(orderIndex);
+    }
+    
+    if (updates.length > 0) {
+      params.push(id);
+      await execute(
+        `UPDATE lessons SET ${updates.join(', ')} WHERE id = ?`,
+        params
+      );
+    }
+    
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao atualizar aula' });
@@ -916,7 +1370,10 @@ app.put('/api/lessons/:id', async (req: Request, res: Response) => {
 app.delete('/api/lessons/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM lessons WHERE id = $1', [id]);
+    await execute(
+      useSQLite ? 'DELETE FROM lessons WHERE id = ?' : 'DELETE FROM lessons WHERE id = $1',
+      [id]
+    );
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao remover aula' });
@@ -927,14 +1384,18 @@ app.delete('/api/lessons/:id', async (req: Request, res: Response) => {
 app.get('/api/lesson-progress/:designerId', async (req: Request, res: Response) => {
   try {
     const { designerId } = req.params;
-    const result = await pool.query('SELECT * FROM lesson_progress WHERE designer_id = $1', [designerId]);
-    return res.json(result.rows.map(p => ({
+    const progress = await query(
+      useSQLite ? 'SELECT * FROM lesson_progress WHERE designer_id = ?' : 'SELECT * FROM lesson_progress WHERE designer_id = $1',
+      [designerId]
+    );
+    const converted = convertNumericFieldsInArray(progress.map(p => ({
       id: p.id,
       lessonId: p.lesson_id,
       designerId: p.designer_id,
       viewed: p.viewed,
-      viewedAt: p.viewed_at ? parseInt(p.viewed_at) : undefined
-    })));
+      viewedAt: p.viewed_at || undefined
+    })), ['viewedAt']);
+    return res.json(converted);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar progresso' });
   }
@@ -945,11 +1406,37 @@ app.post('/api/lesson-progress', async (req: Request, res: Response) => {
     const { lessonId, designerId } = req.body;
     const id = `progress-${Date.now()}`;
     const viewedAt = Date.now();
-    await pool.query(
-      'INSERT INTO lesson_progress (id, lesson_id, designer_id, viewed, viewed_at) VALUES ($1, $2, $3, true, $4) ON CONFLICT (lesson_id, designer_id) DO UPDATE SET viewed = true, viewed_at = $4',
-      [id, lessonId, designerId, viewedAt]
-    );
-    return res.json({ id, lessonId, designerId, viewed: true, viewedAt });
+    
+    // SQLite não tem ON CONFLICT da mesma forma, então vamos fazer um INSERT OR REPLACE
+    if (useSQLite && db) {
+      // Verificar se já existe
+      const existing = await queryOne(
+        'SELECT id FROM lesson_progress WHERE lesson_id = ? AND designer_id = ?',
+        [lessonId, designerId]
+      );
+      
+      if (existing) {
+        await execute(
+          'UPDATE lesson_progress SET viewed = 1, viewed_at = ? WHERE lesson_id = ? AND designer_id = ?',
+          [viewedAt, lessonId, designerId]
+        );
+      } else {
+        await execute(
+          'INSERT INTO lesson_progress (id, lesson_id, designer_id, viewed, viewed_at) VALUES (?, ?, ?, 1, ?)',
+          [id, lessonId, designerId, viewedAt]
+        );
+      }
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      await pool.query(
+        'INSERT INTO lesson_progress (id, lesson_id, designer_id, viewed, viewed_at) VALUES ($1, $2, $3, true, $4) ON CONFLICT (lesson_id, designer_id) DO UPDATE SET viewed = true, viewed_at = $4',
+        [id, lessonId, designerId, viewedAt]
+      );
+      */
+    }
+    
+    return res.json(convertNumericFields({ id, lessonId, designerId, viewed: true, viewedAt }, ['viewedAt']));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao salvar progresso' });
   }
@@ -958,8 +1445,10 @@ app.post('/api/lesson-progress', async (req: Request, res: Response) => {
 app.delete('/api/lesson-progress/:lessonId/:designerId', async (req: Request, res: Response) => {
   try {
     const { lessonId, designerId } = req.params;
-    await pool.query(
-      'DELETE FROM lesson_progress WHERE lesson_id = $1 AND designer_id = $2',
+    await execute(
+      useSQLite
+        ? 'DELETE FROM lesson_progress WHERE lesson_id = ? AND designer_id = ?'
+        : 'DELETE FROM lesson_progress WHERE lesson_id = $1 AND designer_id = $2',
       [lessonId, designerId]
     );
     return res.json({ success: true });
@@ -971,12 +1460,12 @@ app.delete('/api/lesson-progress/:lessonId/:designerId', async (req: Request, re
 // ============ SETTINGS ============
 app.get('/api/settings', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM system_settings WHERE id = 1');
-    if (result.rows.length === 0) {
+    const result = await queryOne('SELECT * FROM system_settings WHERE id = 1');
+    if (!result) {
       return res.json({});
     }
-    const s = result.rows[0];
-    return res.json({
+    const s = result;
+    const settings = {
       logoUrl: s.logo_url,
       brandTitle: s.brand_title,
       loginSubtitle: s.login_subtitle,
@@ -988,7 +1477,8 @@ app.get('/api/settings', async (req: Request, res: Response) => {
       chartEnabled: s.chart_enabled !== undefined ? s.chart_enabled : true,
       showAwardsChart: s.show_awards_chart !== undefined ? s.show_awards_chart : false,
       awardsHasUpdates: s.awards_has_updates === true || s.awards_has_updates === 'true' || s.awards_has_updates === 1
-    });
+    };
+    return res.json(convertNumericFields(settings, ['variationPoints', 'dailyArtGoal']));
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao buscar configurações' });
   }
@@ -1227,20 +1717,21 @@ app.put('/api/settings', async (req: Request, res: Response) => {
 // ============ AWARDS ============
 app.get('/api/awards', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM awards ORDER BY created_at DESC');
-    return res.json(result.rows.map(a => ({
+    const awards = await query('SELECT * FROM awards ORDER BY created_at DESC');
+    const converted = convertNumericFieldsInArray(awards.map(a => ({
       id: a.id,
       designerId: a.designer_id,
       designerName: a.designer_name,
       month: a.month,
       description: a.description,
       imageUrl: a.image_url,
-      createdAt: parseInt(a.created_at)
-    })));
+      createdAt: a.created_at
+    })), ['createdAt']);
+    return res.json(converted);
   } catch (error: any) {
     console.error('Erro ao buscar premiações:', error);
     // Se a tabela não existe, retornar array vazio em vez de erro
-    if (error.code === '42P01') {
+    if (error.message?.includes('no such table') || error.code === '42P01') {
       console.warn('Tabela awards não encontrada. Retornando array vazio.');
       return res.json([]);
     }
@@ -1388,29 +1879,34 @@ app.get('/api/awards/chart-data', async (req: Request, res: Response) => {
     const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999).getTime();
 
     // Buscar todos os designers ativos
-    const designersResult = await pool.query(
-      'SELECT id, name, avatar_color, avatar_url FROM users WHERE role = $1 AND active = true',
-      ['DESIGNER']
+    const designersResult = await query(
+      useSQLite
+        ? "SELECT id, name, avatar_color, avatar_url FROM users WHERE role = 'DESIGNER' AND (active = 1 OR active = 't' OR active = 'true')"
+        : 'SELECT id, name, avatar_color, avatar_url FROM users WHERE role = $1 AND active = true',
+      useSQLite ? [] : ['DESIGNER']
     );
 
     // Buscar demandas do mês atual
-    const demandsResult = await pool.query(
-      'SELECT user_id, total_points FROM demands WHERE timestamp >= $1 AND timestamp <= $2',
+    const demandsResult = await query(
+      useSQLite
+        ? 'SELECT user_id, total_points FROM demands WHERE timestamp >= ? AND timestamp <= ?'
+        : 'SELECT user_id, total_points FROM demands WHERE timestamp >= $1 AND timestamp <= $2',
       [currentMonthStart, currentMonthEnd]
     );
 
     // Agrupar pontos por designer
     const pointsByDesigner: Record<string, number> = {};
-    demandsResult.rows.forEach((demand: any) => {
+    demandsResult.forEach((demand: any) => {
       const userId = demand.user_id;
+      const totalPoints = Number(demand.total_points) || 0;
       if (!pointsByDesigner[userId]) {
         pointsByDesigner[userId] = 0;
       }
-      pointsByDesigner[userId] += parseInt(demand.total_points) || 0;
+      pointsByDesigner[userId] += totalPoints;
     });
 
     // Montar resposta com dados formatados
-    const chartData = designersResult.rows
+    const chartData = designersResult
       .map((designer: any) => {
         const shortName = designer.name.split(' - ')[1] || designer.name.split(' ')[0];
         let color = designer.avatar_color;
@@ -1420,13 +1916,13 @@ app.get('/api/awards/chart-data', async (req: Request, res: Response) => {
         }
         if (!color) {
           const colors = ['#4F46E5', '#06b6d4', '#ec4899', '#f59e0b', '#10b981', '#8b5cf6'];
-          const index = designersResult.rows.findIndex((d: any) => d.id === designer.id);
+          const index = designersResult.findIndex((d: any) => d.id === designer.id);
           color = colors[index % colors.length];
         }
 
         return {
           name: shortName,
-          totalPoints: pointsByDesigner[designer.id] || 0,
+          totalPoints: Number(pointsByDesigner[designer.id] || 0),
           color: color
         };
       })
@@ -1443,35 +1939,42 @@ app.get('/api/awards/chart-data', async (req: Request, res: Response) => {
 // ============ USEFUL LINKS ============
 app.get('/api/useful-links', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM useful_links ORDER BY created_at DESC');
-    const links = result.rows.map(l => ({
+    const linksData = await query('SELECT * FROM useful_links ORDER BY created_at DESC');
+    const links = convertNumericFieldsInArray(linksData.map(l => ({
       id: l.id,
       title: l.title,
       url: l.url,
       imageUrl: l.image_url,
-      createdAt: parseInt(l.created_at)
-    }));
+      createdAt: l.created_at,
+      tags: [] // Será preenchido abaixo
+    })), ['createdAt']);
     
     // Buscar tags para cada link
     for (const link of links) {
       try {
-        const tagsResult = await pool.query(
-          `SELECT t.id, t.name, t.color, t.created_at 
-           FROM tags t 
-           INNER JOIN link_tags lt ON t.id = lt.tag_id 
-           WHERE lt.link_id = $1 
-           ORDER BY t.name ASC`,
+        const tagsResult = await query(
+          useSQLite
+            ? `SELECT t.id, t.name, t.color, t.created_at 
+               FROM tags t 
+               INNER JOIN link_tags lt ON t.id = lt.tag_id 
+               WHERE lt.link_id = ? 
+               ORDER BY t.name ASC`
+            : `SELECT t.id, t.name, t.color, t.created_at 
+               FROM tags t 
+               INNER JOIN link_tags lt ON t.id = lt.tag_id 
+               WHERE lt.link_id = $1 
+               ORDER BY t.name ASC`,
           [link.id]
         );
-        link.tags = tagsResult.rows.map(t => ({
+        link.tags = convertNumericFieldsInArray(tagsResult.map(t => ({
           id: t.id,
           name: t.name,
           color: t.color || null,
-          createdAt: parseInt(t.created_at)
-        }));
+          createdAt: t.created_at
+        })), ['createdAt']);
       } catch (tagError: any) {
         // Se a tabela não existe, retornar array vazio
-        if (tagError.code === '42P01') {
+        if (tagError.message?.includes('no such table') || tagError.code === '42P01') {
           link.tags = [];
         } else {
           console.error('Erro ao buscar tags do link:', tagError);
@@ -1488,7 +1991,6 @@ app.get('/api/useful-links', async (req: Request, res: Response) => {
 });
 
 app.post('/api/useful-links', async (req: Request, res: Response) => {
-  const client = await pool.connect();
   try {
     const { title, url, imageUrl, tagIds } = req.body;
     
@@ -1496,95 +1998,172 @@ app.post('/api/useful-links', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Campos obrigatórios: title, url' });
     }
     
-    await client.query('BEGIN');
-    
     const id = `link-${Date.now()}`;
     const createdAt = Date.now();
-    await client.query(
-      'INSERT INTO useful_links (id, title, url, image_url, created_at) VALUES ($1, $2, $3, $4, $5)',
-      [id, title, url, imageUrl || null, createdAt]
-    );
     
-    // Associar tags se fornecidas
-    if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
-      for (const tagId of tagIds) {
-        const linkTagId = `link-tag-${Date.now()}-${Math.random()}`;
+    if (useSQLite && db) {
+      runTransaction((db) => {
+        db.prepare('INSERT INTO useful_links (id, title, url, image_url, created_at) VALUES (?, ?, ?, ?, ?)')
+          .run(id, title, url, imageUrl || null, createdAt);
+        
+        // Associar tags se fornecidas
+        if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
+          const insertLinkTag = db.prepare('INSERT INTO link_tags (id, link_id, tag_id) VALUES (?, ?, ?)');
+          for (const tagId of tagIds) {
+            const linkTagId = `link-tag-${Date.now()}-${Math.random()}`;
+            insertLinkTag.run(linkTagId, id, tagId);
+          }
+        }
+      });
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
         await client.query(
-          'INSERT INTO link_tags (id, link_id, tag_id) VALUES ($1, $2, $3)',
-          [linkTagId, id, tagId]
+          'INSERT INTO useful_links (id, title, url, image_url, created_at) VALUES ($1, $2, $3, $4, $5)',
+          [id, title, url, imageUrl || null, createdAt]
         );
+        if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
+          for (const tagId of tagIds) {
+            const linkTagId = `link-tag-${Date.now()}-${Math.random()}`;
+            await client.query(
+              'INSERT INTO link_tags (id, link_id, tag_id) VALUES ($1, $2, $3)',
+              [linkTagId, id, tagId]
+            );
+          }
+        }
+        await client.query('COMMIT');
+      } finally {
+        client.release();
       }
+      */
     }
-    
-    await client.query('COMMIT');
     
     // Buscar tags associadas
     let tags = [];
     if (tagIds && Array.isArray(tagIds) && tagIds.length > 0) {
-      const tagsResult = await pool.query(
-        `SELECT t.id, t.name, t.color, t.created_at 
-         FROM tags t 
-         WHERE t.id = ANY($1::text[]) 
-         ORDER BY t.name ASC`,
-        [tagIds]
-      );
-      tags = tagsResult.rows.map(t => ({
-        id: t.id,
-        name: t.name,
-        color: t.color || null,
-        createdAt: parseInt(t.created_at)
-      }));
+      if (useSQLite) {
+        // SQLite: usar IN com placeholders
+        const placeholders = tagIds.map(() => '?').join(',');
+        const tagsResult = await query(
+          `SELECT t.id, t.name, t.color, t.created_at 
+           FROM tags t 
+           WHERE t.id IN (${placeholders}) 
+           ORDER BY t.name ASC`,
+          tagIds
+        );
+        tags = convertNumericFieldsInArray(tagsResult.map(t => ({
+          id: t.id,
+          name: t.name,
+          color: t.color || null,
+          createdAt: t.created_at
+        })), ['createdAt']);
+      } else {
+        // PostgreSQL (comentado)
+        /*
+        const tagsResult = await pool.query(
+          `SELECT t.id, t.name, t.color, t.created_at 
+           FROM tags t 
+           WHERE t.id = ANY($1::text[]) 
+           ORDER BY t.name ASC`,
+          [tagIds]
+        );
+        tags = tagsResult.rows.map(t => ({
+          id: t.id,
+          name: t.name,
+          color: t.color || null,
+          createdAt: parseInt(t.created_at)
+        }));
+        */
+      }
     }
     
-    return res.json({ id, title, url, imageUrl: imageUrl || null, createdAt, tags });
+    return res.json(convertNumericFields({ id, title, url, imageUrl: imageUrl || null, createdAt, tags }, ['createdAt']));
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('Erro ao criar link:', error);
     return res.status(500).json({ error: 'Erro ao criar link', details: error?.message });
-  } finally {
-    client.release();
   }
 });
 
 app.put('/api/useful-links/:id', async (req: Request, res: Response) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { title, url, imageUrl, tagIds } = req.body;
     
-    await client.query('BEGIN');
-    
-    // Atualizar link
-    await client.query(
-      'UPDATE useful_links SET title = COALESCE($1, title), url = COALESCE($2, url), image_url = COALESCE($3, image_url) WHERE id = $4',
-      [title, url, imageUrl, id]
-    );
-    
-    // Atualizar tags se fornecidas
-    if (tagIds !== undefined) {
-      // Remover todas as associações existentes
-      await client.query('DELETE FROM link_tags WHERE link_id = $1', [id]);
-      
-      // Adicionar novas associações
-      if (Array.isArray(tagIds) && tagIds.length > 0) {
-        for (const tagId of tagIds) {
-          const linkTagId = `link-tag-${Date.now()}-${Math.random()}`;
-          await client.query(
-            'INSERT INTO link_tags (id, link_id, tag_id) VALUES ($1, $2, $3)',
-            [linkTagId, id, tagId]
-          );
+    if (useSQLite && db) {
+      runTransaction((db) => {
+        // Atualizar link
+        const updates: string[] = [];
+        const params: any[] = [];
+        
+        if (title !== undefined) {
+          updates.push('title = ?');
+          params.push(title);
         }
+        if (url !== undefined) {
+          updates.push('url = ?');
+          params.push(url);
+        }
+        if (imageUrl !== undefined) {
+          updates.push('image_url = ?');
+          params.push(imageUrl);
+        }
+        
+        if (updates.length > 0) {
+          params.push(id);
+          db.prepare(`UPDATE useful_links SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+        }
+        
+        // Atualizar tags se fornecidas
+        if (tagIds !== undefined) {
+          // Remover todas as associações existentes
+          db.prepare('DELETE FROM link_tags WHERE link_id = ?').run(id);
+          
+          // Adicionar novas associações
+          if (Array.isArray(tagIds) && tagIds.length > 0) {
+            const insertLinkTag = db.prepare('INSERT INTO link_tags (id, link_id, tag_id) VALUES (?, ?, ?)');
+            for (const tagId of tagIds) {
+              const linkTagId = `link-tag-${Date.now()}-${Math.random()}`;
+              insertLinkTag.run(linkTagId, id, tagId);
+            }
+          }
+        }
+      });
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query(
+          'UPDATE useful_links SET title = COALESCE($1, title), url = COALESCE($2, url), image_url = COALESCE($3, image_url) WHERE id = $4',
+          [title, url, imageUrl, id]
+        );
+        if (tagIds !== undefined) {
+          await client.query('DELETE FROM link_tags WHERE link_id = $1', [id]);
+          if (Array.isArray(tagIds) && tagIds.length > 0) {
+            for (const tagId of tagIds) {
+              const linkTagId = `link-tag-${Date.now()}-${Math.random()}`;
+              await client.query(
+                'INSERT INTO link_tags (id, link_id, tag_id) VALUES ($1, $2, $3)',
+                [linkTagId, id, tagId]
+              );
+            }
+          }
+        }
+        await client.query('COMMIT');
+      } finally {
+        client.release();
       }
+      */
     }
     
-    await client.query('COMMIT');
     return res.json({ success: true });
   } catch (error: any) {
-    await client.query('ROLLBACK');
     console.error('Erro ao atualizar link:', error);
     return res.status(500).json({ error: 'Erro ao atualizar link', details: error?.message });
-  } finally {
-    client.release();
   }
 });
 
@@ -1592,8 +2171,14 @@ app.delete('/api/useful-links/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     // Deletar tags associadas primeiro
-    await pool.query('DELETE FROM link_tags WHERE link_id = $1', [id]);
-    await pool.query('DELETE FROM useful_links WHERE id = $1', [id]);
+    await execute(
+      useSQLite ? 'DELETE FROM link_tags WHERE link_id = ?' : 'DELETE FROM link_tags WHERE link_id = $1',
+      [id]
+    );
+    await execute(
+      useSQLite ? 'DELETE FROM useful_links WHERE id = ?' : 'DELETE FROM useful_links WHERE id = $1',
+      [id]
+    );
     return res.json({ success: true });
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao remover link' });
@@ -1603,16 +2188,17 @@ app.delete('/api/useful-links/:id', async (req: Request, res: Response) => {
 // ============ TAGS ============
 app.get('/api/tags', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query('SELECT * FROM tags ORDER BY name ASC');
-    return res.json(result.rows.map(t => ({
+    const tags = await query('SELECT * FROM tags ORDER BY name ASC');
+    const converted = convertNumericFieldsInArray(tags.map(t => ({
       id: t.id,
       name: t.name,
       color: t.color || null,
-      createdAt: parseInt(t.created_at)
-    })));
+      createdAt: t.created_at
+    })), ['createdAt']);
+    return res.json(converted);
   } catch (error: any) {
     // Se a tabela não existe, retornar array vazio
-    if (error.code === '42P01') {
+    if (error.message?.includes('no such table') || error.code === '42P01') {
       return res.json([]);
     }
     console.error('Erro ao buscar tags:', error);
@@ -1629,18 +2215,25 @@ app.post('/api/tags', async (req: Request, res: Response) => {
     }
     
     // Verificar se já existe tag com o mesmo nome
-    const existing = await pool.query('SELECT id FROM tags WHERE LOWER(name) = LOWER($1)', [name.trim()]);
-    if (existing.rows.length > 0) {
+    const existing = await queryOne(
+      useSQLite
+        ? 'SELECT id FROM tags WHERE LOWER(name) = LOWER(?)'
+        : 'SELECT id FROM tags WHERE LOWER(name) = LOWER($1)',
+      [name.trim()]
+    );
+    if (existing) {
       return res.status(400).json({ error: 'Já existe uma tag com este nome' });
     }
     
     const id = `tag-${Date.now()}`;
     const createdAt = Date.now();
-    await pool.query(
-      'INSERT INTO tags (id, name, color, created_at) VALUES ($1, $2, $3, $4)',
+    await execute(
+      useSQLite
+        ? 'INSERT INTO tags (id, name, color, created_at) VALUES (?, ?, ?, ?)'
+        : 'INSERT INTO tags (id, name, color, created_at) VALUES ($1, $2, $3, $4)',
       [id, name.trim(), color || null, createdAt]
     );
-    return res.json({ id, name: name.trim(), color: color || null, createdAt });
+    return res.json(convertNumericFields({ id, name: name.trim(), color: color || null, createdAt }, ['createdAt']));
   } catch (error: any) {
     console.error('Erro ao criar tag:', error);
     return res.status(500).json({ error: 'Erro ao criar tag', details: error?.message });
@@ -1654,16 +2247,38 @@ app.put('/api/tags/:id', async (req: Request, res: Response) => {
     
     if (name && name.trim()) {
       // Verificar se já existe outra tag com o mesmo nome
-      const existing = await pool.query('SELECT id FROM tags WHERE LOWER(name) = LOWER($1) AND id != $2', [name.trim(), id]);
-      if (existing.rows.length > 0) {
+      const existing = await queryOne(
+        useSQLite
+          ? 'SELECT id FROM tags WHERE LOWER(name) = LOWER(?) AND id != ?'
+          : 'SELECT id FROM tags WHERE LOWER(name) = LOWER($1) AND id != $2',
+        [name.trim(), id]
+      );
+      if (existing) {
         return res.status(400).json({ error: 'Já existe uma tag com este nome' });
       }
     }
     
-    await pool.query(
-      'UPDATE tags SET name = COALESCE($1, name), color = COALESCE($2, color) WHERE id = $3',
-      [name ? name.trim() : null, color, id]
-    );
+    // Construir query dinamicamente para SQLite
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (name !== undefined) {
+      updates.push('name = ?');
+      params.push(name ? name.trim() : null);
+    }
+    if (color !== undefined) {
+      updates.push('color = ?');
+      params.push(color);
+    }
+    
+    if (updates.length > 0) {
+      params.push(id);
+      await execute(
+        `UPDATE tags SET ${updates.join(', ')} WHERE id = ?`,
+        params
+      );
+    }
+    
     return res.json({ success: true });
   } catch (error: any) {
     console.error('Erro ao atualizar tag:', error);

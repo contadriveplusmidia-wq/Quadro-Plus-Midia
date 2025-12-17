@@ -16,10 +16,12 @@
     "check:dev": "node scripts/check-dev.js"
   },
   "dependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.5",
     "@vercel/node": "^5.5.12",
     "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^12.5.0",
     "concurrently": "^9.2.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",

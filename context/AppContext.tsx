@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag } from '../types';
 
 const API_URL = '';
@@ -764,7 +764,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const refreshData = fetchData;
+  const refreshData = useCallback(fetchData, []);
 
   return (
     <AppContext.Provider value={{

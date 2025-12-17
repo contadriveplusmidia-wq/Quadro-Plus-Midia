@@ -13,3 +13,5 @@ CREATE INDEX IF NOT EXISTS idx_demands_execution_code ON demands(execution_code)
 -- Comentário na coluna
 COMMENT ON COLUMN demands.execution_code IS 'Código de execução automático baseado no dia da semana e ordem da demanda no dia. Formato: {DIA}{ORDEM} (ex: QA1, SX2)';
 
+
+

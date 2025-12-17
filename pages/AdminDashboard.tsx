@@ -36,9 +36,10 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload, label, i
       </p>
       <div className="space-y-1">
         {payload.map((entry, index) => {
+          const numValue = Number(entry.value) || 0;
           const [formattedValue, formattedName] = formatter 
-            ? formatter(entry.value, entry.name) 
-            : [entry.value, entry.name];
+            ? formatter(numValue, entry.name) 
+            : [numValue, entry.name];
           const color = entry.color || entry.payload?.color || '#3B82F6';
           return (
             <div key={index} className="flex items-center gap-2 text-xs">
@@ -86,7 +87,8 @@ export const AdminDashboard: React.FC = () => {
     }, 15000); // 15 segundos para atualização mais frequente
 
     return () => clearInterval(interval);
-  }, [refreshData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Executar apenas uma vez ao montar
 
   // Função para verificar se um designer está online (em tempo real)
   const isDesignerOnline = useCallback((designerId: string): boolean => {
@@ -305,8 +307,15 @@ export const AdminDashboard: React.FC = () => {
   }, [demands, selectedDesigner, dateFilter, customStartDate, customEndDate]);
 
   const stats = useMemo(() => {
-    const totalPoints = filteredDemands.reduce((acc, d) => acc + d.totalPoints, 0);
-    const totalArts = filteredDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
+    // Garantir que os valores são números
+    const totalPoints = filteredDemands.reduce((acc, d) => {
+      const points = Number(d.totalPoints) || 0;
+      return acc + points;
+    }, 0);
+    const totalArts = filteredDemands.reduce((acc, d) => {
+      const quantity = Number(d.totalQuantity) || 0;
+      return acc + quantity;
+    }, 0);
     const totalDemands = filteredDemands.length;
 
     const designerPoints: Record<string, { name: string; points: number }> = {};
@@ -318,7 +327,8 @@ export const AdminDashboard: React.FC = () => {
           points: 0 
         };
       }
-      designerPoints[d.userId].points += d.totalPoints;
+      const points = Number(d.totalPoints) || 0;
+      designerPoints[d.userId].points += points;
     });
 
     let topPerformer = { name: '-', points: 0 };
@@ -335,31 +345,40 @@ export const AdminDashboard: React.FC = () => {
     const { start, end } = getDateRange();
     const workingDays = getWorkingDaysInRange(start, end);
 
-    return designers.map(designer => {
+    const data = designers.map(designer => {
       const designerDemands = filteredDemands.filter(d => d.userId === designer.id);
-      const points = designerDemands.reduce((acc, d) => acc + d.totalPoints, 0);
-      const arts = designerDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
-      const avgPoints = Math.round(points / workingDays);
-      const avgArts = Math.round((arts / workingDays) * 10) / 10;
+      // Garantir que os valores são números
+      const points = designerDemands.reduce((acc, d) => {
+        const totalPoints = Number(d.totalPoints) || 0;
+        return acc + totalPoints;
+      }, 0);
+      const arts = designerDemands.reduce((acc, d) => {
+        const totalQuantity = Number(d.totalQuantity) || 0;
+        return acc + totalQuantity;
+      }, 0);
+      const avgPoints = workingDays > 0 ? Math.round(points / workingDays) : 0;
+      const avgArts = workingDays > 0 ? Math.round((arts / workingDays) * 10) / 10 : 0;
       
       return {
         name: designer.name.split(' - ')[1] || designer.name,
         fullName: designer.name,
-        points,
-        arts,
-        avgPoints,
-        avgArts,
+        points: Number(points) || 0,
+        arts: Number(arts) || 0,
+        avgPoints: Number(avgPoints) || 0,
+        avgArts: Number(avgArts) || 0,
         color: getDesignerColor(designer.id)
       };
-    }).filter(d => d.points > 0 || d.arts > 0);
+    }).filter(d => (d.points > 0 || d.arts > 0) && !isNaN(d.points) && !isNaN(d.arts) && isFinite(d.points) && isFinite(d.arts));
+    
+    return data;
   }, [designers, filteredDemands, dateFilter, customStartDate, customEndDate]);
 
   const pieData = useMemo(() => {
     return chartData.map(d => ({
       name: d.name,
-      value: d.points,
+      value: Number(d.points) || 0,
       color: d.color
-    }));
+    })).filter(d => d.value > 0 && !isNaN(d.value));
   }, [chartData]);
 
   const { start, end } = getDateRange();
@@ -378,6 +397,7 @@ export const AdminDashboard: React.FC = () => {
       default: return 'points';
     }
   };
+
 
   return (
     <div className="space-y-6">
@@ -649,9 +669,19 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {chartData.length > 0 ? (
+        {chartData && chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={chartData} barCategoryGap="20%">
+            <BarChart 
+              data={chartData.map(d => {
+                const key = getChartDataKey();
+                const value = Number(d[key]) || 0;
+                return {
+                  ...d,
+                  [key]: isNaN(value) || !isFinite(value) ? 0 : value
+                };
+              })} 
+              barCategoryGap="20%"
+            >
               <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
               <XAxis 
                 dataKey="name" 
@@ -668,10 +698,13 @@ export const AdminDashboard: React.FC = () => {
                 content={
                   <CustomTooltip 
                     isDark={isDark} 
-                    formatter={(value, name) => [
-                      chartMode.startsWith('media') ? value.toFixed(1) : value,
-                      chartMode.endsWith('Points') ? 'Pontos' : 'Artes'
-                    ]}
+                    formatter={(value, name) => {
+                      const numValue = Number(value) || 0;
+                      return [
+                        chartMode.startsWith('media') ? numValue.toFixed(1) : numValue,
+                        chartMode.endsWith('Points') ? 'Pontos' : 'Artes'
+                      ];
+                    }}
                   />
                 }
                 cursor={{ fill: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}
@@ -700,12 +733,18 @@ export const AdminDashboard: React.FC = () => {
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
             Distribuicao de Pontos
           </h3>
-          {pieData.length > 0 ? (
+          {pieData && pieData.length > 0 ? (
             <>
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
                   <Pie
-                    data={pieData}
+                    data={pieData.map(d => {
+                      const value = Number(d.value) || 0;
+                      return {
+                        ...d,
+                        value: isNaN(value) || !isFinite(value) || value <= 0 ? 0 : value
+                      };
+                    }).filter(d => d.value > 0)}
                     cx="50%"
                     cy="50%"
                     innerRadius={60}
@@ -722,7 +761,10 @@ export const AdminDashboard: React.FC = () => {
                     content={
                       <CustomTooltip 
                         isDark={isDark} 
-                        formatter={(value) => [`${value} pts`, 'Pontos']}
+                        formatter={(value) => {
+                          const numValue = Number(value) || 0;
+                          return [`${numValue} pts`, 'Pontos'];
+                        }}
                       />
                     }
                   />
@@ -762,11 +804,20 @@ export const AdminDashboard: React.FC = () => {
                         points: 0
                       };
                     }
-                    artTypeStats[item.artTypeId].quantity += item.quantity;
-                    artTypeStats[item.artTypeId].points += item.totalPoints;
+                    const quantity = Number(item.quantity) || 0;
+                    const totalPoints = Number(item.totalPoints) || 0;
+                    artTypeStats[item.artTypeId].quantity += quantity;
+                    artTypeStats[item.artTypeId].points += totalPoints;
                   });
                 });
-                const sorted = Object.values(artTypeStats).sort((a, b) => b.points - a.points);
+                const sorted = Object.values(artTypeStats)
+                  .map(stat => ({
+                    ...stat,
+                    quantity: Number(stat.quantity) || 0,
+                    points: Number(stat.points) || 0
+                  }))
+                  .filter(stat => !isNaN(stat.points) && !isNaN(stat.quantity))
+                  .sort((a, b) => b.points - a.points);
                 const maxPoints = Math.max(...sorted.map(s => s.points), 1);
 
                 return sorted.slice(0, 6).map((stat, i) => (
@@ -796,12 +847,12 @@ export const AdminDashboard: React.FC = () => {
       </div>
 
       {/* Visualização de Meta Diária Batida */}
+      {/* IMPORTANTE: Passar TODAS as demandas, não apenas as filtradas, para calcular corretamente quem bateu a meta na semana */}
+      {/* Não passar startDate/endDate para que o componente sempre use a semana atual como padrão */}
       <DailyGoalChart
-        demands={filteredDemands}
+        demands={demands}
         designers={designers}
         settings={settings}
-        startDate={start}
-        endDate={end}
         isDark={isDark}
       />
 

@@ -202,7 +202,10 @@ const getWeeklyProductivity = (demands: Demand[], designers: User[], selectedYea
       });
       
       const shortName = designer.name.split(' - ')[1] || designer.name.split(' ')[0];
-      weekData[shortName] = designerDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
+      weekData[shortName] = designerDemands.reduce((acc, d) => {
+        const quantity = Number(d.totalQuantity) || 0;
+        return acc + quantity;
+      }, 0);
     });
     
     return weekData;
@@ -233,7 +236,10 @@ const getMonthlyProductivity = (demands: Demand[], designers: User[]) => {
       });
       
       const shortName = designer.name.split(' - ')[1] || designer.name.split(' ')[0];
-      monthData[shortName] = designerDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
+      monthData[shortName] = designerDemands.reduce((acc, d) => {
+        const quantity = Number(d.totalQuantity) || 0;
+        return acc + quantity;
+      }, 0);
     });
     
     return monthData;
@@ -255,18 +261,24 @@ const getYearlyProductivity = (demands: Demand[], designers: User[]) => {
              demandDate <= yearEnd;
     });
     
-    const totalArts = designerDemands.reduce((acc, d) => acc + d.totalQuantity, 0);
-    const totalPoints = designerDemands.reduce((acc, d) => acc + d.totalPoints, 0);
+    const totalArts = designerDemands.reduce((acc, d) => {
+      const quantity = Number(d.totalQuantity) || 0;
+      return acc + quantity;
+    }, 0);
+    const totalPoints = designerDemands.reduce((acc, d) => {
+      const points = Number(d.totalPoints) || 0;
+      return acc + points;
+    }, 0);
     const totalDemands = designerDemands.length;
     const avgMonthly = Math.round(totalArts / 12);
     
     return {
       name: designer.name.split(' - ')[1] || designer.name.split(' ')[0],
       fullName: designer.name,
-      artes: totalArts,
-      pontos: totalPoints,
+      artes: Number(totalArts) || 0,
+      pontos: Number(totalPoints) || 0,
       demandas: totalDemands,
-      mediaMensal: avgMonthly,
+      mediaMensal: Number(avgMonthly) || 0,
       color: getDesignerColor(designer, idx)
     };
   }).filter(d => d.artes > 0 || d.pontos > 0);
