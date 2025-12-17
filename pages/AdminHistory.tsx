@@ -1,15 +1,37 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Calendar, Clock, ChevronDown, Users, Filter, X } from 'lucide-react';
+import { Calendar, Clock, ChevronDown, Users, Filter, X, Trash2 } from 'lucide-react';
 import { TimeFilter, WorkSessionRow } from '../types';
 import { HistoryCharts } from '../components/HistoryCharts';
 import { DatePicker } from '../components/DatePicker';
 
 export const AdminHistory: React.FC = () => {
-  const { users, demands, workSessions, adminFilters, setAdminFilters } = useApp();
+  const { users, demands, workSessions, adminFilters, setAdminFilters, deleteDemand, refreshData } = useApp();
   const [viewMode, setViewMode] = useState<'sessions' | 'demands' | 'charts'>('sessions');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Se vier com filtro de designer, definir viewMode como 'demands'
+  // E configurar as datas customizadas se vierem no customRange
+  useEffect(() => {
+    if (adminFilters.designerId !== 'all') {
+      setViewMode('demands');
+      
+      // Se customRange foi definido e período é 'today', significa que veio de um clique
+      // Nesse caso, manter período como 'today' mas usar o customRange para o dia clicado
+      if (adminFilters.customRange && adminFilters.period === 'today') {
+        // Não precisa preencher customStartDate/customEndDate pois o período é 'today'
+        // O getDateRange vai usar o customRange quando período for 'today'
+      } else if (adminFilters.customRange && adminFilters.period === 'custom') {
+        // Se período é 'custom', preencher as datas
+        const startDateStr = formatDateForInput(adminFilters.customRange.start.getTime());
+        const endDateStr = formatDateForInput(adminFilters.customRange.end.getTime());
+        setCustomStartDate(startDateStr);
+        setCustomEndDate(endDateStr);
+      }
+    }
+  }, [adminFilters.designerId, adminFilters.period, adminFilters.customRange]);
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -19,6 +41,14 @@ export const AdminHistory: React.FC = () => {
     
     switch (adminFilters.period) {
       case 'today':
+        // Se customRange existe e período é 'today', usar o dia do customRange (dia clicado)
+        if (adminFilters.customRange && adminFilters.period === 'today') {
+          const clickedDay = new Date(adminFilters.customRange.start);
+          clickedDay.setHours(0, 0, 0, 0);
+          const clickedDayEnd = new Date(adminFilters.customRange.end);
+          clickedDayEnd.setHours(23, 59, 59, 999);
+          return { start: clickedDay.getTime(), end: clickedDayEnd.getTime() };
+        }
         return { start: today.getTime(), end: now.getTime() };
       case 'yesterday':
         const yesterday = new Date(today);
@@ -478,7 +508,14 @@ export const AdminHistory: React.FC = () => {
                           {demand.userName.charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-semibold text-slate-900 dark:text-white">{demand.userName}</p>
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-slate-900 dark:text-white">{demand.userName}</p>
+                            {demand.executionCode && (
+                              <span className="px-2 py-0.5 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded text-xs font-semibold">
+                                {demand.executionCode}
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-1.5">
                             <Clock size={12} />
                             {formatDateTime(demand.timestamp)}
@@ -501,14 +538,37 @@ export const AdminHistory: React.FC = () => {
                         ))}
                       </div>
                     </div>
-                    <div className="flex-shrink-0 text-right">
-                      <div className="inline-flex flex-col items-end gap-1 px-4 py-2.5 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-200 dark:border-brand-800">
-                        <p className="text-2xl font-bold text-brand-600 dark:text-brand-400">{demand.totalPoints}</p>
-                        <p className="text-xs font-medium text-slate-500 dark:text-slate-400">pontos</p>
+                    <div className="flex-shrink-0 flex items-center gap-3">
+                      <div className="text-right">
+                        <div className="inline-flex flex-col items-end gap-1 px-4 py-2.5 bg-brand-50 dark:bg-brand-900/20 rounded-lg border border-brand-200 dark:border-brand-800">
+                          <p className="text-2xl font-bold text-brand-600 dark:text-brand-400">{demand.totalPoints}</p>
+                          <p className="text-xs font-medium text-slate-500 dark:text-slate-400">pontos</p>
+                        </div>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+                          {demand.totalQuantity} {demand.totalQuantity === 1 ? 'arte' : 'artes'}
+                        </p>
                       </div>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
-                        {demand.totalQuantity} {demand.totalQuantity === 1 ? 'arte' : 'artes'}
-                      </p>
+                      <button
+                        onClick={async () => {
+                          if (window.confirm(`Tem certeza que deseja excluir esta demanda de ${demand.userName}?`)) {
+                            setDeletingId(demand.id);
+                            try {
+                              await deleteDemand(demand.id);
+                              await refreshData();
+                            } catch (error) {
+                              console.error('Erro ao excluir demanda:', error);
+                              alert('Erro ao excluir demanda. Tente novamente.');
+                            } finally {
+                              setDeletingId(null);
+                            }
+                          }
+                        }}
+                        disabled={deletingId === demand.id}
+                        className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Excluir demanda"
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </div>
                 </div>

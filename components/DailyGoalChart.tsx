@@ -1,4 +1,6 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useApp } from '../context/AppContext';
 import { Target, Calendar, X } from 'lucide-react';
 import { Demand, User, SystemSettings } from '../types';
 import { DatePicker } from './DatePicker';
@@ -12,6 +14,15 @@ interface DayData {
     artsCount: number;
     color: string;
   }>;
+}
+
+interface DailyGoalChartProps {
+  demands: Demand[];
+  designers: User[];
+  settings: SystemSettings;
+  startDate?: number;
+  endDate?: number;
+  isDark?: boolean;
 }
 
 // Função para formatar timestamp para string YYYY-MM-DD
@@ -64,6 +75,9 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
   endDate: propEndDate,
   isDark
 }) => {
+  const navigate = useNavigate();
+  const { setAdminFilters } = useApp();
+  
   // Estado interno para controle de datas
   const [internalStartDate, setInternalStartDate] = useState<number>(() => {
     if (propStartDate) return propStartDate;
@@ -309,13 +323,37 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
                               }}
                             >
                               <div
-                                className="w-full rounded transition-all duration-200 cursor-pointer flex items-center justify-center relative overflow-hidden"
+                                onClick={() => {
+                                  // Definir filtro do designer para o DIA ESPECÍFICO clicado
+                                  // Usar o dia da demanda (day.date) para filtrar apenas aquele dia
+                                  const clickedDay = new Date(day.date);
+                                  clickedDay.setHours(0, 0, 0, 0);
+                                  const clickedDayEnd = new Date(day.date);
+                                  clickedDayEnd.setHours(23, 59, 59, 999);
+                                  
+                                  // Verificar se o dia clicado é hoje
+                                  const today = new Date();
+                                  today.setHours(0, 0, 0, 0);
+                                  const isToday = clickedDay.getTime() === today.getTime();
+                                  
+                                  setAdminFilters({
+                                    period: isToday ? 'today' : 'custom',
+                                    designerId: designer.designerId,
+                                    customRange: isToday ? undefined : {
+                                      start: clickedDay,
+                                      end: clickedDayEnd
+                                    }
+                                  });
+                                  navigate('/admin/history');
+                                }}
+                                className="w-full rounded transition-all duration-200 cursor-pointer flex items-center justify-center relative overflow-hidden hover:opacity-100"
                                 style={{
                                   backgroundColor: designer.color,
                                   height: `${Math.min(100, (designer.artsCount / (dailyGoal * 2)) * 100)}%`,
                                   minHeight: '32px',
                                   opacity: isHovered ? 1 : 0.85
                                 }}
+                                title={`Clique para ver demandas de ${designer.designerName}`}
                               >
                                 {/* Nome do designer na barra */}
                                 <span 

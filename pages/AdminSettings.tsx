@@ -184,20 +184,21 @@ export const AdminSettings: React.FC = () => {
     setShowUserModal(true);
   };
 
+  const handleToggleActive = async (id: string) => {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    
+    const newActiveStatus = !user.active;
+    await updateUser(id, { active: newActiveStatus });
+  };
+
   const handleDeleteUser = async (id: string) => {
     const user = users.find(u => u.id === id);
     if (!user) return;
     
-    if (user.active) {
-      // Se está ativo, apenas desativa
-      if (confirm('Tem certeza que deseja desativar este designer?')) {
-        await deleteUser(id);
-      }
-    } else {
-      // Se está inativo, deleta permanentemente
-      if (confirm('Tem certeza que deseja deletar permanentemente este usuário? Esta ação não pode ser desfeita.')) {
-        await deleteUserPermanently(id);
-      }
+    // Se está inativo, deleta permanentemente
+    if (confirm('Tem certeza que deseja deletar permanentemente este usuário? Esta ação não pode ser desfeita.')) {
+      await deleteUserPermanently(id);
     }
   };
 
@@ -523,22 +524,43 @@ export const AdminSettings: React.FC = () => {
                     <p className="text-sm text-slate-500">{user.active ? 'Ativo' : 'Inativo'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                  {/* Toggle Ativo/Inativo */}
+                  <button
+                    onClick={() => handleToggleActive(user.id)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-brand-600 focus:ring-offset-2 ${
+                      user.active 
+                        ? 'bg-brand-600' 
+                        : 'bg-slate-300 dark:bg-slate-600'
+                    }`}
+                    title={user.active ? 'Desativar designer' : 'Ativar designer'}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        user.active ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                  
                   {user.active && (
                     <button
                       onClick={() => handleEditUser(user)}
                       className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg"
+                      title="Editar designer"
                     >
                       <Edit2 size={18} />
                     </button>
                   )}
-                  <button
-                    onClick={() => handleDeleteUser(user.id)}
-                    className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
-                    title={user.active ? 'Desativar' : 'Deletar permanentemente'}
-                  >
-                    <Trash2 size={18} />
-                  </button>
+                  
+                  {!user.active && (
+                    <button
+                      onClick={() => handleDeleteUser(user.id)}
+                      className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg"
+                      title="Deletar permanentemente"
+                    >
+                      <Trash2 size={18} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

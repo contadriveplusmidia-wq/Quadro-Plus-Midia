@@ -462,8 +462,15 @@ export const DesignerDashboard: React.FC = () => {
                     {formatTime(demand.timestamp)}
                   </td>
                   <td className="px-6 py-4">
-                    <div className="text-sm font-medium text-slate-900 dark:text-white">
-                      Entrega ({demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'})
+                    <div className="flex items-center gap-2 mb-1">
+                      {demand.executionCode && (
+                        <span className="px-2 py-0.5 bg-brand-100 dark:bg-brand-900/30 text-brand-700 dark:text-brand-300 rounded text-xs font-semibold">
+                          {demand.executionCode}
+                        </span>
+                      )}
+                      <div className="text-sm font-medium text-slate-900 dark:text-white">
+                        Entrega ({demand.items.length} {demand.items.length === 1 ? 'item' : 'itens'})
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-1 mt-1">
                       {demand.items.map((item, idx) => (

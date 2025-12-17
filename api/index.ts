@@ -372,6 +372,160 @@ app.post('/api/work-sessions', async (req: Request, res: Response) => {
 });
 
 // ============ DEMANDS ============
+
+// Função para gerar código de execução baseado no dia da semana e ordem
+// Contagem: POR DESIGNER (cada designer tem sua própria sequência)
+// Horário: 00:00-23:59 (dia calendário)
+async function generateExecutionCode(pool: Pool, timestamp: number, userId: string, excludeDemandId?: string): Promise<string> {
+  const date = new Date(timestamp);
+  const dayOfWeek = date.getDay(); // 0 = domingo, 1 = segunda, ..., 6 = sábado
+  
+  // Mapeamento de dias da semana
+  const dayCodes: { [key: number]: string } = {
+    0: 'D',   // Domingo (caso necessário)
+    1: 'S',   // Segunda-feira
+    2: 'T',   // Terça-feira
+    3: 'QA',  // Quarta-feira
+    4: 'QI',  // Quinta-feira
+    5: 'SX',  // Sexta-feira
+    6: 'SB'   // Sábado
+  };
+  
+  const dayCode = dayCodes[dayOfWeek];
+  if (!dayCode) {
+    throw new Error('Dia da semana inválido');
+  }
+  
+  // Calcular início e fim do dia calendário (00:00:00 até 23:59:59.999)
+  // IMPORTANTE: Usar o mesmo objeto Date para garantir consistência de timezone
+  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+  
+  const startTimestamp = startOfDay.getTime();
+  const endTimestamp = endOfDay.getTime();
+  
+  // Contar demandas do dia que foram criadas ANTES desta (timestamp menor)
+  // IMPORTANTE: Contar APENAS do dia atual E APENAS do designer específico
+  // Cada designer tem sua própria sequência (T1, T2, T3...)
+  const startTs = Number(startTimestamp);
+  const currentTs = Number(timestamp);
+  
+  // Query que garante: 
+  // - Apenas do dia atual (startTs até endTs)
+  // - Apenas do designer específico (user_id = userId)
+  // - Criadas antes da atual (timestamp < currentTs)
+  let countQuery = 'SELECT COUNT(*) as count FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND timestamp < $3 AND user_id = $4';
+  const countParams: any[] = [startTs, endTimestamp, currentTs, userId];
+  
+  if (excludeDemandId) {
+    countQuery += ' AND id != $5';
+    countParams.push(excludeDemandId);
+  }
+  
+  // Debug: verificar o que está sendo contado
+  const debugQuery = countQuery.replace('COUNT(*) as count', 'id, timestamp, execution_code, user_id');
+  try {
+    const debugResult = await pool.query(debugQuery, countParams);
+    console.log('[EXECUTION CODE] Debug - Demandas do DESIGNER no DIA ATUAL:', debugResult.rows.length, {
+      userId,
+      dia: date.toLocaleDateString('pt-BR'),
+      startTimestamp: startTs,
+      endTimestamp: endTimestamp,
+      currentTimestamp: currentTs,
+      dateStart: new Date(startTs).toISOString(),
+      dateEnd: new Date(endTimestamp).toISOString(),
+      dateCurrent: new Date(currentTs).toISOString(),
+      demands: debugResult.rows.map((r: any) => ({
+        id: r.id,
+        userId: r.user_id,
+        timestamp: r.timestamp,
+        executionCode: r.execution_code,
+        date: new Date(parseInt(r.timestamp)).toISOString()
+      }))
+    });
+  } catch (debugError) {
+    console.warn('[EXECUTION CODE] Erro no debug:', debugError);
+  }
+  
+  const countResult = await pool.query(countQuery, countParams);
+  const totalDemandsBeforeThis = parseInt(countResult.rows[0]?.count || '0', 10) || 0;
+  const orderInDay = totalDemandsBeforeThis + 1;
+  
+  // Gerar código no formato {CODIGO_DO_DIA}{ORDEM_DA_DEMANDA}
+  const code = `${dayCode}${orderInDay}`;
+  console.log('[EXECUTION CODE] Gerado:', code, { 
+    userId,
+    dia: date.toLocaleDateString('pt-BR'),
+    dayOfWeek, 
+    dayCode, 
+    totalDemandsBeforeThis, 
+    orderInDay,
+    startTimestamp: startTs,
+    endTimestamp: endTimestamp,
+    currentTimestamp: currentTs
+  });
+  return code;
+}
+
+// Função para reordenar códigos após exclusão
+// Reordena todas as demandas do designer no dia baseado na ordem de timestamp
+async function reorderExecutionCodes(pool: Pool, deletedTimestamp: number, userId: string) {
+  const date = new Date(deletedTimestamp);
+  
+  // Calcular início e fim do dia (garantir apenas do dia específico)
+  const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0);
+  const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59, 999);
+  
+  const startTimestamp = startOfDay.getTime();
+  const endTimestamp = endOfDay.getTime();
+  
+  // Buscar todas as demandas do DESIGNER no dia ordenadas por timestamp (ordem de criação)
+  // IMPORTANTE: Apenas do dia específico E apenas do designer específico
+  const demandsResult = await pool.query(
+    'SELECT id, timestamp FROM demands WHERE timestamp >= $1 AND timestamp <= $2 AND user_id = $3 ORDER BY timestamp ASC',
+    [startTimestamp, endTimestamp, userId]
+  );
+  
+  console.log('[REORDER] Reordenando códigos para', demandsResult.rows.length, 'demandas do designer', userId, 'no dia', date.toLocaleDateString('pt-BR'));
+  
+  // Reordenar códigos baseado na ordem de timestamp
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Reordenar códigos baseado na ordem de timestamp (ordem de criação)
+    for (let i = 0; i < demandsResult.rows.length; i++) {
+      const demand = demandsResult.rows[i];
+      const demandTimestamp = parseInt(demand.timestamp);
+      
+      // Obter código do dia
+      const dayOfWeek = new Date(demandTimestamp).getDay();
+      const dayCodes: { [key: number]: string } = {
+        0: 'D', 1: 'S', 2: 'T', 3: 'QA', 4: 'QI', 5: 'SX', 6: 'SB'
+      };
+      const dayCode = dayCodes[dayOfWeek];
+      
+      // Gerar código baseado na posição na ordem (i + 1)
+      // A ordem já está correta porque a query ordena por timestamp ASC
+      const correctCode = `${dayCode}${i + 1}`;
+      
+      await client.query(
+        'UPDATE demands SET execution_code = $1 WHERE id = $2',
+        [correctCode, demand.id]
+      );
+    }
+    
+    await client.query('COMMIT');
+    console.log('[EXECUTION CODE] Códigos reordenados para', demandsResult.rows.length, 'demandas do designer', userId);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('[EXECUTION CODE] Erro ao reordenar códigos:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 app.get('/api/demands', async (req: Request, res: Response) => {
   try {
     const { userId, startDate, endDate } = req.query;
@@ -408,7 +562,8 @@ app.get('/api/demands', async (req: Request, res: Response) => {
         })),
         totalQuantity: d.total_quantity,
         totalPoints: d.total_points,
-        timestamp: parseInt(d.timestamp)
+        timestamp: parseInt(d.timestamp),
+        executionCode: d.execution_code || undefined
       };
     }));
     return res.json(demands);
@@ -424,11 +579,47 @@ app.post('/api/demands', async (req: Request, res: Response) => {
     const { userId, userName, items, totalQuantity, totalPoints } = req.body;
     const id = `demand-${Date.now()}`;
     const timestamp = Date.now();
+    
+    // Gerar código de execução ANTES de iniciar a transação
+    // IMPORTANTE: Passar userId para contar apenas demandas deste designer
+    let executionCode: string | null = null;
+    try {
+      executionCode = await generateExecutionCode(pool, timestamp, userId);
+    } catch (codeError: any) {
+      console.warn('[CREATE DEMAND] Erro ao gerar código de execução:', codeError?.message);
+      // Continuar sem código se houver erro
+    }
+    
     await client.query('BEGIN');
-    await client.query(
-      'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
-      [id, userId, userName, totalQuantity, totalPoints, timestamp]
-    );
+    
+    // Inserir demanda com código de execução (se existir)
+    try {
+      if (executionCode) {
+        await client.query(
+          'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp, execution_code) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+          [id, userId, userName, totalQuantity, totalPoints, timestamp, executionCode]
+        );
+      } else {
+        // Se não conseguiu gerar código, inserir sem ele
+        await client.query(
+          'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
+          [id, userId, userName, totalQuantity, totalPoints, timestamp]
+        );
+      }
+    } catch (insertError: any) {
+      // Se a coluna execution_code não existir, inserir sem ela
+      if (insertError?.code === '42703' || insertError?.message?.includes('column "execution_code" does not exist')) {
+        console.warn('[CREATE DEMAND] Coluna execution_code não existe, inserindo sem código');
+        await client.query(
+          'INSERT INTO demands (id, user_id, user_name, total_quantity, total_points, timestamp) VALUES ($1, $2, $3, $4, $5, $6)',
+          [id, userId, userName, totalQuantity, totalPoints, timestamp]
+        );
+        executionCode = null;
+      } else {
+        throw insertError;
+      }
+    }
+    
     for (const item of items) {
       await client.query(
         'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
@@ -437,10 +628,15 @@ app.post('/api/demands', async (req: Request, res: Response) => {
     }
     await client.query('COMMIT');
     
-    return res.json({ id, userId, userName, items, totalQuantity, totalPoints, timestamp });
+    const response: any = { id, userId, userName, items, totalQuantity, totalPoints, timestamp };
+    if (executionCode) {
+      response.executionCode = executionCode;
+    }
+    
+    return res.json(response);
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error(error);
+    console.error('[CREATE DEMAND] Erro:', error);
     return res.status(500).json({ error: 'Erro ao criar demanda' });
   } finally {
     client.release();
@@ -453,13 +649,50 @@ app.put('/api/demands/:id', async (req: Request, res: Response) => {
     const { id } = req.params;
     const { items, totalQuantity, totalPoints } = req.body;
     
+    // Buscar demanda atual para obter timestamp e userId
+    const currentDemand = await pool.query('SELECT timestamp, user_id FROM demands WHERE id = $1', [id]);
+    if (currentDemand.rows.length === 0) {
+      return res.status(404).json({ error: 'Demanda não encontrada' });
+    }
+    
+    const timestamp = parseInt(currentDemand.rows[0].timestamp);
+    const demandUserId = currentDemand.rows[0].user_id;
+    
+    // Recalcular código de execução (código muda ao editar)
+    // IMPORTANTE: Passar userId para contar apenas demandas deste designer
+    let executionCode: string | null = null;
+    try {
+      executionCode = await generateExecutionCode(pool, timestamp, demandUserId, id);
+    } catch (codeError: any) {
+      console.warn('[UPDATE DEMAND] Erro ao recalcular código de execução:', codeError?.message);
+    }
+    
     await client.query('BEGIN');
     
-    // Atualizar dados da demanda
-    await client.query(
-      'UPDATE demands SET total_quantity = $1, total_points = $2 WHERE id = $3',
-      [totalQuantity, totalPoints, id]
-    );
+    // Atualizar dados da demanda (incluindo código se existir)
+    if (executionCode) {
+      try {
+        await client.query(
+          'UPDATE demands SET total_quantity = $1, total_points = $2, execution_code = $3 WHERE id = $4',
+          [totalQuantity, totalPoints, executionCode, id]
+        );
+      } catch (updateError: any) {
+        // Se coluna não existir, atualizar sem código
+        if (updateError?.code === '42703') {
+          await client.query(
+            'UPDATE demands SET total_quantity = $1, total_points = $2 WHERE id = $3',
+            [totalQuantity, totalPoints, id]
+          );
+        } else {
+          throw updateError;
+        }
+      }
+    } else {
+      await client.query(
+        'UPDATE demands SET total_quantity = $1, total_points = $2 WHERE id = $3',
+        [totalQuantity, totalPoints, id]
+      );
+    }
     
     // Remover itens antigos
     await client.query('DELETE FROM demand_items WHERE demand_id = $1', [id]);
@@ -498,7 +731,8 @@ app.put('/api/demands/:id', async (req: Request, res: Response) => {
       })),
       totalQuantity: demand.total_quantity,
       totalPoints: demand.total_points,
-      timestamp: parseInt(demand.timestamp)
+      timestamp: parseInt(demand.timestamp),
+      executionCode: demand.execution_code || undefined
     });
   } catch (error) {
     await client.query('ROLLBACK');
@@ -513,14 +747,32 @@ app.delete('/api/demands/:id', async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const { id } = req.params;
+    
+    // Buscar timestamp e userId da demanda antes de deletar (para reordenar códigos)
+    const demandResult = await pool.query('SELECT timestamp, user_id FROM demands WHERE id = $1', [id]);
+    const deletedTimestamp = demandResult.rows.length > 0 ? parseInt(demandResult.rows[0].timestamp) : null;
+    const deletedUserId = demandResult.rows.length > 0 ? demandResult.rows[0].user_id : null;
+    
     await client.query('BEGIN');
     await client.query('DELETE FROM demand_items WHERE demand_id = $1', [id]);
     await client.query('DELETE FROM demands WHERE id = $1', [id]);
     await client.query('COMMIT');
+    
+    // Reordenar códigos após exclusão (se timestamp e userId existem)
+    // IMPORTANTE: Reordenar apenas as demandas do designer específico
+    if (deletedTimestamp && deletedUserId) {
+      try {
+        await reorderExecutionCodes(pool, deletedTimestamp, deletedUserId);
+      } catch (reorderError) {
+        console.error('[DELETE DEMAND] Erro ao reordenar códigos:', reorderError);
+        // Não falhar a exclusão se a reordenação falhar
+      }
+    }
+    
     return res.json({ success: true });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error(error);
+    console.error('[DELETE DEMAND] Erro:', error);
     return res.status(500).json({ error: 'Erro ao remover demanda' });
   } finally {
     client.release();

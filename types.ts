@@ -37,6 +37,7 @@ export interface Demand {
   totalQuantity: number; // Sum of quantities
   totalPoints: number; // Sum of points
   timestamp: number;
+  executionCode?: string; // Código de execução automático (ex: S1, T2, QA1, QI2, SX1, SB1, D1)
 }
 
 export interface WorkSession {
