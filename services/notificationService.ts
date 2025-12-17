@@ -7,12 +7,31 @@ export const notificationService = {
    * Busca todas as notificações (para painel ADM)
    */
   getAllNotifications: async (): Promise<DesignerNotification[]> => {
-    const res = await fetch(`${API_URL}/api/designer-notifications`);
-    if (!res.ok) {
-      if (res.status === 404) return [];
-      throw new Error('Erro ao buscar notificações');
+    try {
+      const res = await fetch(`${API_URL}/api/designer-notifications`);
+      if (!res.ok) {
+        // Se a tabela não existe ou retornar erro, retornar array vazio
+        if (res.status === 404 || res.status === 500) {
+          const errorData = await res.json().catch(() => ({}));
+          // Se o erro for "no such table", retornar array vazio
+          if (errorData.details?.includes('no such table') || errorData.error?.includes('no such table')) {
+            return [];
+          }
+          // Outros erros 500 também retornam array vazio para não quebrar o frontend
+          if (res.status === 500) {
+            console.warn('Erro ao buscar notificações (tabela pode não existir):', errorData);
+            return [];
+          }
+        }
+        throw new Error('Erro ao buscar notificações');
+      }
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    } catch (error) {
+      console.error('Erro ao buscar notificações:', error);
+      // Retornar array vazio em caso de erro para não quebrar o frontend
+      return [];
     }
-    return await res.json();
   },
 
   /**

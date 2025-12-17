@@ -451,7 +451,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(feedback)
     });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao criar feedback' }));
+      throw new Error(error.error || 'Erro ao criar feedback');
+    }
     const newFeedback = await res.json();
+    // Garantir que imageUrls é um array
+    if (newFeedback.imageUrls && typeof newFeedback.imageUrls === 'string') {
+      try {
+        newFeedback.imageUrls = JSON.parse(newFeedback.imageUrls);
+      } catch {
+        newFeedback.imageUrls = [];
+      }
+    }
     setFeedbacks(prev => [newFeedback, ...prev]);
   };
 

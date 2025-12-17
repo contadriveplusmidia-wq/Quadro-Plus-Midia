@@ -245,7 +245,10 @@ async function rollbackTransaction(client: any): Promise<void> {
 // Função helper para executar transação SQLite
 function runTransaction(callback: (db: DatabaseType) => void): void {
   if (useSQLite && db) {
-    db.transaction(callback)();
+    const transactionFn = db.transaction(() => {
+      callback(db);
+    });
+    transactionFn();
   } else {
     // PostgreSQL (comentado para desenvolvimento local)
     /*
@@ -309,10 +312,10 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
   try {
     const { name, password } = req.body;
     
-    // SQLite pode armazenar booleanos como 't'/'f' ou 1/0, então vamos usar uma query mais flexível
+    // SQLite pode armazenar booleanos como 't'/'f' ou 1/0 ou 1.0, então vamos usar uma query mais flexível
     const users = await query(
       useSQLite
-        ? "SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = ? AND (active = 1 OR active = 't' OR active = 'true')"
+        ? "SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = ? AND (active = 1 OR active = 1.0 OR active = 't' OR active = 'true' OR CAST(active AS REAL) = 1)"
         : 'SELECT id, name, password, role, avatar_url, avatar_color, active FROM users WHERE name = $1 AND active = true',
       [name]
     );
@@ -444,7 +447,9 @@ app.put('/api/users/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { name, password, active, avatarColor } = req.body;
-    const hashedPassword = password ? await hashPassword(password) : null;
+    
+    // Só hashar senha se ela foi fornecida e não está vazia
+    const hashedPassword = (password && password.trim().length > 0) ? await hashPassword(password.trim()) : null;
     
     // SQLite não tem COALESCE da mesma forma, então vamos construir a query dinamicamente
     const updates: string[] = [];
@@ -1054,83 +1059,138 @@ app.post('/api/demands', async (req: Request, res: Response) => {
 });
 
 app.put('/api/demands/:id', async (req: Request, res: Response) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     const { items, totalQuantity, totalPoints } = req.body;
     
     // Buscar demanda atual para obter timestamp e userId
-    const currentDemand = await pool.query('SELECT timestamp, user_id FROM demands WHERE id = $1', [id]);
-    if (currentDemand.rows.length === 0) {
+    const currentDemand = await queryOne(
+      useSQLite ? 'SELECT timestamp, user_id FROM demands WHERE id = ?' : 'SELECT timestamp, user_id FROM demands WHERE id = $1',
+      [id]
+    );
+    if (!currentDemand) {
       return res.status(404).json({ error: 'Demanda não encontrada' });
     }
     
-    const timestamp = parseInt(currentDemand.rows[0].timestamp);
-    const demandUserId = currentDemand.rows[0].user_id;
+    const timestamp = Number(currentDemand.timestamp);
+    const demandUserId = currentDemand.user_id;
     
     // Recalcular código de execução (código muda ao editar)
     // IMPORTANTE: Passar userId para contar apenas demandas deste designer
     let executionCode: string | null = null;
     try {
-      executionCode = await generateExecutionCode(pool, timestamp, demandUserId, id);
+      executionCode = await generateExecutionCode(timestamp, demandUserId, id);
     } catch (codeError: any) {
       console.warn('[UPDATE DEMAND] Erro ao recalcular código de execução:', codeError?.message);
     }
     
-    await client.query('BEGIN');
-    
-    // Atualizar dados da demanda (incluindo código se existir)
-    if (executionCode) {
-      try {
-        await client.query(
-          'UPDATE demands SET total_quantity = $1, total_points = $2, execution_code = $3 WHERE id = $4',
-          [totalQuantity, totalPoints, executionCode, id]
+    if (useSQLite && db) {
+      const transaction = db.transaction(() => {
+        // Atualizar dados da demanda (incluindo código se existir)
+        if (executionCode) {
+          try {
+            db.prepare(
+              'UPDATE demands SET total_quantity = ?, total_points = ?, execution_code = ? WHERE id = ?'
+            ).run(totalQuantity, totalPoints, executionCode, id);
+          } catch (updateError: any) {
+            // Se coluna não existir, atualizar sem código
+            if (updateError.message?.includes('no such column')) {
+              db.prepare(
+                'UPDATE demands SET total_quantity = ?, total_points = ? WHERE id = ?'
+              ).run(totalQuantity, totalPoints, id);
+            } else {
+              throw updateError;
+            }
+          }
+        } else {
+          db.prepare(
+            'UPDATE demands SET total_quantity = ?, total_points = ? WHERE id = ?'
+          ).run(totalQuantity, totalPoints, id);
+        }
+        
+        // Remover itens antigos
+        db.prepare('DELETE FROM demand_items WHERE demand_id = ?').run(id);
+        
+        // Inserir novos itens
+        const insertItem = db.prepare(
+          'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
         );
-      } catch (updateError: any) {
-        // Se coluna não existir, atualizar sem código
-        if (updateError?.code === '42703') {
+        for (const item of items) {
+          insertItem.run(
+            id, item.artTypeId, item.artTypeLabel, item.pointsPerUnit, item.quantity, item.variationQuantity || 0, item.variationPoints || 0, item.totalPoints
+          );
+        }
+      });
+      
+      transaction();
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        if (executionCode) {
+          try {
+            await client.query(
+              'UPDATE demands SET total_quantity = $1, total_points = $2, execution_code = $3 WHERE id = $4',
+              [totalQuantity, totalPoints, executionCode, id]
+            );
+          } catch (updateError: any) {
+            if (updateError?.code === '42703') {
+              await client.query(
+                'UPDATE demands SET total_quantity = $1, total_points = $2 WHERE id = $3',
+                [totalQuantity, totalPoints, id]
+              );
+            } else {
+              throw updateError;
+            }
+          }
+        } else {
           await client.query(
             'UPDATE demands SET total_quantity = $1, total_points = $2 WHERE id = $3',
             [totalQuantity, totalPoints, id]
           );
-        } else {
-          throw updateError;
         }
+        
+        await client.query('DELETE FROM demand_items WHERE demand_id = $1', [id]);
+        
+        for (const item of items) {
+          await client.query(
+            'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
+            [id, item.artTypeId, item.artTypeLabel, item.pointsPerUnit, item.quantity, item.variationQuantity || 0, item.variationPoints || 0, item.totalPoints]
+          );
+        }
+        
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
       }
-    } else {
-      await client.query(
-        'UPDATE demands SET total_quantity = $1, total_points = $2 WHERE id = $3',
-        [totalQuantity, totalPoints, id]
-      );
+      */
     }
-    
-    // Remover itens antigos
-    await client.query('DELETE FROM demand_items WHERE demand_id = $1', [id]);
-    
-    // Inserir novos itens
-    for (const item of items) {
-      await client.query(
-        'INSERT INTO demand_items (demand_id, art_type_id, art_type_label, points_per_unit, quantity, variation_quantity, variation_points, total_points) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',
-        [id, item.artTypeId, item.artTypeLabel, item.pointsPerUnit, item.quantity, item.variationQuantity || 0, item.variationPoints || 0, item.totalPoints]
-      );
-    }
-    
-    await client.query('COMMIT');
     
     // Buscar demanda atualizada
-    const demandResult = await pool.query('SELECT * FROM demands WHERE id = $1', [id]);
-    if (demandResult.rows.length === 0) {
+    const demand = await queryOne(
+      useSQLite ? 'SELECT * FROM demands WHERE id = ?' : 'SELECT * FROM demands WHERE id = $1',
+      [id]
+    );
+    if (!demand) {
       return res.status(404).json({ error: 'Demanda não encontrada' });
     }
     
-    const demand = demandResult.rows[0];
-    const itemsResult = await pool.query('SELECT * FROM demand_items WHERE demand_id = $1', [id]);
+    const demandItems = await query(
+      useSQLite ? 'SELECT * FROM demand_items WHERE demand_id = ?' : 'SELECT * FROM demand_items WHERE demand_id = $1',
+      [id]
+    );
     
-    return res.json({
+    return res.json(convertNumericFields({
       id: demand.id,
       userId: demand.user_id,
       userName: demand.user_name,
-      items: itemsResult.rows.map(i => ({
+      items: demandItems.map(i => ({
         artTypeId: i.art_type_id,
         artTypeLabel: i.art_type_label,
         pointsPerUnit: i.points_per_unit,
@@ -1141,38 +1201,56 @@ app.put('/api/demands/:id', async (req: Request, res: Response) => {
       })),
       totalQuantity: demand.total_quantity,
       totalPoints: demand.total_points,
-      timestamp: parseInt(demand.timestamp),
+      timestamp: demand.timestamp,
       executionCode: demand.execution_code || undefined
-    });
+    }, ['pointsPerUnit', 'quantity', 'variationQuantity', 'variationPoints', 'totalPoints', 'totalQuantity', 'totalPoints', 'timestamp']));
   } catch (error) {
-    await client.query('ROLLBACK');
-    console.error(error);
+    console.error('[UPDATE DEMAND] Erro:', error);
     return res.status(500).json({ error: 'Erro ao atualizar demanda' });
-  } finally {
-    client.release();
   }
 });
 
 app.delete('/api/demands/:id', async (req: Request, res: Response) => {
-  const client = await pool.connect();
   try {
     const { id } = req.params;
     
     // Buscar timestamp e userId da demanda antes de deletar (para reordenar códigos)
-    const demandResult = await pool.query('SELECT timestamp, user_id FROM demands WHERE id = $1', [id]);
-    const deletedTimestamp = demandResult.rows.length > 0 ? parseInt(demandResult.rows[0].timestamp) : null;
-    const deletedUserId = demandResult.rows.length > 0 ? demandResult.rows[0].user_id : null;
+    const demand = await queryOne(
+      useSQLite ? 'SELECT timestamp, user_id FROM demands WHERE id = ?' : 'SELECT timestamp, user_id FROM demands WHERE id = $1',
+      [id]
+    );
+    const deletedTimestamp = demand ? Number(demand.timestamp) : null;
+    const deletedUserId = demand ? demand.user_id : null;
     
-    await client.query('BEGIN');
-    await client.query('DELETE FROM demand_items WHERE demand_id = $1', [id]);
-    await client.query('DELETE FROM demands WHERE id = $1', [id]);
-    await client.query('COMMIT');
+    if (useSQLite && db) {
+      const transaction = db.transaction(() => {
+        db.prepare('DELETE FROM demand_items WHERE demand_id = ?').run(id);
+        db.prepare('DELETE FROM demands WHERE id = ?').run(id);
+      });
+      transaction();
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        await client.query('DELETE FROM demand_items WHERE demand_id = $1', [id]);
+        await client.query('DELETE FROM demands WHERE id = $1', [id]);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK');
+        throw error;
+      } finally {
+        client.release();
+      }
+      */
+    }
     
     // Reordenar códigos após exclusão (se timestamp e userId existem)
     // IMPORTANTE: Reordenar apenas as demandas do designer específico
     if (deletedTimestamp && deletedUserId) {
       try {
-        await reorderExecutionCodes(pool, deletedTimestamp, deletedUserId);
+        await reorderExecutionCodes(deletedTimestamp, deletedUserId);
       } catch (reorderError) {
         console.error('[DELETE DEMAND] Erro ao reordenar códigos:', reorderError);
         // Não falhar a exclusão se a reordenação falhar
@@ -1181,11 +1259,8 @@ app.delete('/api/demands/:id', async (req: Request, res: Response) => {
     
     return res.json({ success: true });
   } catch (error) {
-    await client.query('ROLLBACK');
     console.error('[DELETE DEMAND] Erro:', error);
     return res.status(500).json({ error: 'Erro ao remover demanda' });
-  } finally {
-    client.release();
   }
 });
 
@@ -1201,19 +1276,34 @@ app.get('/api/feedbacks', async (req: Request, res: Response) => {
     }
     sql += ' ORDER BY created_at DESC';
     const feedbacks = await query(sql, params);
-    const converted = convertNumericFieldsInArray(feedbacks.map(f => ({
-      id: f.id,
-      designerId: f.designer_id,
-      designerName: f.designer_name,
-      adminName: f.admin_name,
-      imageUrls: f.image_urls || [],
-      comment: f.comment,
-      createdAt: f.created_at,
-      viewed: f.viewed,
-      viewedAt: f.viewed_at || undefined,
-      response: f.response || undefined,
-      responseAt: f.response_at || undefined
-    })), ['createdAt', 'viewedAt', 'responseAt']);
+    const converted = convertNumericFieldsInArray(feedbacks.map(f => {
+      // SQLite armazena image_urls como JSON string, precisa fazer parse
+      let imageUrls = [];
+      try {
+        if (typeof f.image_urls === 'string') {
+          imageUrls = f.image_urls ? JSON.parse(f.image_urls) : [];
+        } else if (Array.isArray(f.image_urls)) {
+          imageUrls = f.image_urls;
+        }
+      } catch (parseError) {
+        console.warn('Erro ao fazer parse de image_urls:', parseError);
+        imageUrls = [];
+      }
+      
+      return {
+        id: f.id,
+        designerId: f.designer_id,
+        designerName: f.designer_name,
+        adminName: f.admin_name,
+        imageUrls,
+        comment: f.comment,
+        createdAt: f.created_at,
+        viewed: f.viewed === 1 || f.viewed === '1' || f.viewed === true,
+        viewedAt: f.viewed_at || undefined,
+        response: f.response || undefined,
+        responseAt: f.response_at || undefined
+      };
+    }), ['createdAt', 'viewedAt', 'responseAt']);
     return res.json(converted);
   } catch (error: any) {
     // Se a tabela não existe, retornar array vazio
@@ -1230,16 +1320,20 @@ app.post('/api/feedbacks', async (req: Request, res: Response) => {
     const { designerId, designerName, adminName, imageUrls, comment } = req.body;
     const id = `feedback-${Date.now()}`;
     const createdAt = Date.now();
+    
+    // SQLite precisa armazenar array como JSON string
+    const imageUrlsJson = Array.isArray(imageUrls) ? JSON.stringify(imageUrls) : (imageUrls || '[]');
+    
     await execute(
       useSQLite
         ? 'INSERT INTO feedbacks (id, designer_id, designer_name, admin_name, image_urls, comment, created_at, viewed) VALUES (?, ?, ?, ?, ?, ?, ?, 0)'
         : 'INSERT INTO feedbacks (id, designer_id, designer_name, admin_name, image_urls, comment, created_at, viewed) VALUES ($1, $2, $3, $4, $5, $6, $7, false)',
-      [id, designerId, designerName, adminName, imageUrls || [], comment, createdAt]
+      [id, designerId, designerName, adminName, imageUrlsJson, comment || null, createdAt]
     );
-    return res.json(convertNumericFields({ id, designerId, designerName, adminName, imageUrls, comment, createdAt, viewed: false }, ['createdAt']));
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({ error: 'Erro ao criar feedback' });
+    return res.json(convertNumericFields({ id, designerId, designerName, adminName, imageUrls: Array.isArray(imageUrls) ? imageUrls : (imageUrls ? JSON.parse(imageUrls) : []), comment, createdAt, viewed: false }, ['createdAt']));
+  } catch (error: any) {
+    console.error('Erro ao criar feedback:', error);
+    return res.status(500).json({ error: 'Erro ao criar feedback', details: error?.message });
   }
 });
 
@@ -1476,7 +1570,8 @@ app.get('/api/settings', async (req: Request, res: Response) => {
       nextAwardImage: s.next_award_image || null,
       chartEnabled: s.chart_enabled !== undefined ? s.chart_enabled : true,
       showAwardsChart: s.show_awards_chart !== undefined ? s.show_awards_chart : false,
-      awardsHasUpdates: s.awards_has_updates === true || s.awards_has_updates === 'true' || s.awards_has_updates === 1
+      awardsHasUpdates: s.awards_has_updates === true || s.awards_has_updates === 'true' || s.awards_has_updates === 1,
+      faviconUrl: s.favicon_url || null
     };
     return res.json(convertNumericFields(settings, ['variationPoints', 'dailyArtGoal']));
   } catch (error) {
@@ -1497,24 +1592,56 @@ app.put('/api/settings', async (req: Request, res: Response) => {
       nextAwardImage,
       chartEnabled,
       showAwardsChart,
-      awardsHasUpdates
+      awardsHasUpdates,
+      faviconUrl
     } = req.body;
 
-    // Verificar e criar coluna daily_art_goal se não existir
-    try {
-      await pool.query(`
-        DO $$ 
-        BEGIN 
-          IF NOT EXISTS (
-            SELECT 1 FROM information_schema.columns 
-            WHERE table_name = 'system_settings' AND column_name = 'daily_art_goal'
-          ) THEN
-            ALTER TABLE system_settings ADD COLUMN daily_art_goal INTEGER DEFAULT 8;
-          END IF;
-        END $$;
-      `);
-    } catch (colError) {
-      console.error('Erro ao verificar/criar coluna daily_art_goal:', colError);
+    // Verificar e criar colunas se não existirem (apenas para SQLite, PostgreSQL usa IF NOT EXISTS)
+    if (useSQLite && db) {
+      try {
+        // SQLite não tem IF NOT EXISTS para ALTER TABLE, então vamos tentar e ignorar erro se já existir
+        const columns = [
+          { name: 'daily_art_goal', sql: 'ALTER TABLE system_settings ADD COLUMN daily_art_goal INTEGER DEFAULT 8' },
+          { name: 'motivational_message', sql: 'ALTER TABLE system_settings ADD COLUMN motivational_message TEXT' },
+          { name: 'motivational_message_enabled', sql: 'ALTER TABLE system_settings ADD COLUMN motivational_message_enabled INTEGER DEFAULT 0' },
+          { name: 'next_award_image', sql: 'ALTER TABLE system_settings ADD COLUMN next_award_image TEXT' },
+          { name: 'chart_enabled', sql: 'ALTER TABLE system_settings ADD COLUMN chart_enabled INTEGER DEFAULT 1' },
+          { name: 'show_awards_chart', sql: 'ALTER TABLE system_settings ADD COLUMN show_awards_chart INTEGER DEFAULT 0' },
+          { name: 'awards_has_updates', sql: 'ALTER TABLE system_settings ADD COLUMN awards_has_updates INTEGER DEFAULT 0' },
+          { name: 'favicon_url', sql: 'ALTER TABLE system_settings ADD COLUMN favicon_url TEXT' }
+        ];
+        for (const col of columns) {
+          try {
+            db.prepare(col.sql).run();
+          } catch (colError: any) {
+            // Ignorar erro se coluna já existir
+            if (!colError.message?.includes('duplicate column')) {
+              console.warn(`Erro ao criar coluna ${col.name}:`, colError.message);
+            }
+          }
+        }
+      } catch (colError) {
+        console.error('Erro ao verificar/criar colunas:', colError);
+      }
+    } else {
+      // PostgreSQL (comentado para desenvolvimento local)
+      /*
+      try {
+        await pool.query(`
+          DO $$ 
+          BEGIN 
+            IF NOT EXISTS (
+              SELECT 1 FROM information_schema.columns 
+              WHERE table_name = 'system_settings' AND column_name = 'daily_art_goal'
+            ) THEN
+              ALTER TABLE system_settings ADD COLUMN daily_art_goal INTEGER DEFAULT 8;
+            END IF;
+          END $$;
+        `);
+      } catch (colError) {
+        console.error('Erro ao verificar/criar coluna daily_art_goal:', colError);
+      }
+      */
     }
     
     // Se houver alterações relacionadas a premiações, ativar flag de atualizações
@@ -1540,62 +1667,54 @@ app.put('/api/settings', async (req: Request, res: Response) => {
     // Construir query dinamicamente para atualizar apenas os campos fornecidos
     const updates: string[] = [];
     const values: any[] = [];
-    let paramIndex = 1;
     
     if (logoUrl !== undefined) {
-      updates.push(`logo_url = $${paramIndex}`);
+      updates.push(useSQLite ? 'logo_url = ?' : `logo_url = $${values.length + 1}`);
       values.push(logoUrl);
-      paramIndex++;
     }
     if (brandTitle !== undefined) {
-      updates.push(`brand_title = $${paramIndex}`);
+      updates.push(useSQLite ? 'brand_title = ?' : `brand_title = $${values.length + 1}`);
       values.push(brandTitle);
-      paramIndex++;
     }
     if (loginSubtitle !== undefined) {
-      updates.push(`login_subtitle = $${paramIndex}`);
+      updates.push(useSQLite ? 'login_subtitle = ?' : `login_subtitle = $${values.length + 1}`);
       values.push(loginSubtitle);
-      paramIndex++;
     }
     if (variationPointsValue !== undefined) {
-      updates.push(`variation_points = $${paramIndex}`);
+      updates.push(useSQLite ? 'variation_points = ?' : `variation_points = $${values.length + 1}`);
       values.push(variationPointsValue);
-      paramIndex++;
     }
     if (dailyArtGoalValue !== undefined) {
-      updates.push(`daily_art_goal = $${paramIndex}`);
+      updates.push(useSQLite ? 'daily_art_goal = ?' : `daily_art_goal = $${values.length + 1}`);
       values.push(dailyArtGoalValue);
-      paramIndex++;
     }
     if (motivationalMessage !== undefined) {
-      updates.push(`motivational_message = $${paramIndex}`);
+      updates.push(useSQLite ? 'motivational_message = ?' : `motivational_message = $${values.length + 1}`);
       values.push(motivationalMessage);
-      paramIndex++;
     }
     if (motivationalMessageEnabled !== undefined) {
-      updates.push(`motivational_message_enabled = $${paramIndex}`);
-      values.push(motivationalMessageEnabled);
-      paramIndex++;
+      updates.push(useSQLite ? 'motivational_message_enabled = ?' : `motivational_message_enabled = $${values.length + 1}`);
+      values.push(motivationalMessageEnabled ? 1 : 0);
     }
     if (nextAwardImage !== undefined) {
-      updates.push(`next_award_image = $${paramIndex}`);
+      updates.push(useSQLite ? 'next_award_image = ?' : `next_award_image = $${values.length + 1}`);
       values.push(nextAwardImage);
-      paramIndex++;
     }
     if (chartEnabled !== undefined) {
-      updates.push(`chart_enabled = $${paramIndex}`);
-      values.push(chartEnabled);
-      paramIndex++;
+      updates.push(useSQLite ? 'chart_enabled = ?' : `chart_enabled = $${values.length + 1}`);
+      values.push(chartEnabled ? 1 : 0);
     }
     if (showAwardsChart !== undefined) {
-      updates.push(`show_awards_chart = $${paramIndex}`);
-      values.push(showAwardsChart);
-      paramIndex++;
+      updates.push(useSQLite ? 'show_awards_chart = ?' : `show_awards_chart = $${values.length + 1}`);
+      values.push(showAwardsChart ? 1 : 0);
     }
     if (awardsHasUpdates !== undefined) {
-      updates.push(`awards_has_updates = $${paramIndex}`);
-      values.push(awardsHasUpdates);
-      paramIndex++;
+      updates.push(useSQLite ? 'awards_has_updates = ?' : `awards_has_updates = $${values.length + 1}`);
+      values.push(awardsHasUpdates ? 1 : 0);
+    }
+    if (faviconUrl !== undefined) {
+      updates.push(useSQLite ? 'favicon_url = ?' : `favicon_url = $${values.length + 1}`);
+      values.push(faviconUrl);
     }
     
     if (updates.length === 0) {
@@ -1606,14 +1725,15 @@ app.put('/api/settings', async (req: Request, res: Response) => {
     console.log('Query SQL:', query);
     console.log('Valores:', values);
     
-    await pool.query(query, values);
+    await execute(query, values);
     
     // Verificar o valor salvo
     try {
-      const verifyResult = await pool.query('SELECT daily_art_goal, variation_points FROM system_settings WHERE id = 1');
+      const verifyResult = await queryOne('SELECT daily_art_goal, variation_points, favicon_url FROM system_settings WHERE id = 1');
       console.log('Valores salvos no banco:', { 
-        daily_art_goal: verifyResult.rows[0]?.daily_art_goal, 
-        variation_points: verifyResult.rows[0]?.variation_points 
+        daily_art_goal: verifyResult?.daily_art_goal, 
+        variation_points: verifyResult?.variation_points,
+        favicon_url: verifyResult?.favicon_url ? 'presente' : 'ausente'
       });
     } catch (verifyError) {
       console.error('Erro ao verificar valores salvos:', verifyError);
@@ -1622,7 +1742,10 @@ app.put('/api/settings', async (req: Request, res: Response) => {
     // Se houver alterações relacionadas a premiações, ativar flag (exceto se awardsHasUpdates for explicitamente false)
     if (hasAwardRelatedChanges && awardsHasUpdates !== false) {
       try {
-        await pool.query('UPDATE system_settings SET awards_has_updates = true WHERE id = 1');
+        await execute(
+          useSQLite ? 'UPDATE system_settings SET awards_has_updates = 1 WHERE id = 1' : 'UPDATE system_settings SET awards_has_updates = true WHERE id = 1',
+          []
+        );
       } catch (updateError) {
         console.error('Erro ao atualizar flag de atualizações:', updateError);
       }
@@ -1630,85 +1753,9 @@ app.put('/api/settings', async (req: Request, res: Response) => {
     
     return res.json({ success: true });
   } catch (error: any) {
-    // Se as colunas não existirem, tentar criar
-    if (error.code === '42703') {
-      try {
-        await pool.query(`
-          ALTER TABLE system_settings 
-          ADD COLUMN IF NOT EXISTS daily_art_goal INTEGER DEFAULT 8,
-          ADD COLUMN IF NOT EXISTS motivational_message TEXT,
-          ADD COLUMN IF NOT EXISTS motivational_message_enabled BOOLEAN DEFAULT false,
-          ADD COLUMN IF NOT EXISTS next_award_image TEXT,
-          ADD COLUMN IF NOT EXISTS chart_enabled BOOLEAN DEFAULT true,
-          ADD COLUMN IF NOT EXISTS show_awards_chart BOOLEAN DEFAULT false,
-          ADD COLUMN IF NOT EXISTS awards_has_updates BOOLEAN DEFAULT false
-        `);
-        // Tentar novamente após criar as colunas
-        const { 
-          logoUrl, 
-          brandTitle, 
-          loginSubtitle, 
-          variationPoints,
-          dailyArtGoal,
-          motivationalMessage,
-          motivationalMessageEnabled,
-          nextAwardImage,
-          chartEnabled,
-          showAwardsChart,
-          awardsHasUpdates
-        } = req.body;
-        
-        const hasAwardRelatedChangesRetry = 
-          motivationalMessage !== undefined ||
-          motivationalMessageEnabled !== undefined ||
-          nextAwardImage !== undefined ||
-          chartEnabled !== undefined ||
-          showAwardsChart !== undefined;
-        
-        await pool.query(
-          `UPDATE system_settings SET 
-            logo_url = COALESCE($1, logo_url), 
-            brand_title = COALESCE($2, brand_title), 
-            login_subtitle = COALESCE($3, login_subtitle), 
-            variation_points = COALESCE($4, variation_points),
-            daily_art_goal = COALESCE($5, daily_art_goal),
-            motivational_message = COALESCE($6, motivational_message),
-            motivational_message_enabled = COALESCE($7, motivational_message_enabled),
-            next_award_image = COALESCE($8, next_award_image),
-            chart_enabled = COALESCE($9, chart_enabled),
-            show_awards_chart = COALESCE($10, show_awards_chart),
-            awards_has_updates = COALESCE($11, awards_has_updates)
-          WHERE id = 1`,
-          [
-            logoUrl, 
-            brandTitle, 
-            loginSubtitle, 
-            variationPoints,
-            dailyArtGoal !== undefined && dailyArtGoal !== null ? Number(dailyArtGoal) : null,
-            motivationalMessage,
-            motivationalMessageEnabled,
-            nextAwardImage,
-            chartEnabled,
-            showAwardsChart,
-            awardsHasUpdates
-          ]
-        );
-        
-        // Se houver alterações relacionadas a premiações, ativar flag (exceto se awardsHasUpdates for explicitamente false)
-        if (hasAwardRelatedChangesRetry && awardsHasUpdates !== false) {
-          try {
-            await pool.query('UPDATE system_settings SET awards_has_updates = true WHERE id = 1');
-          } catch (updateError) {
-            console.error('Erro ao atualizar flag de atualizações:', updateError);
-          }
-        }
-        
-        return res.json({ success: true });
-      } catch (createError) {
-        console.error('Erro ao criar colunas:', createError);
-        return res.status(500).json({ error: 'Erro ao atualizar configurações', details: createError });
-      }
-    }
+    // SQLite não precisa de tratamento especial para colunas faltantes (já criadas automaticamente)
+    // PostgreSQL (comentado para desenvolvimento local)
+    // if (error.code === '42703') { ... }
     console.error('Erro ao atualizar configurações:', error);
     return res.status(500).json({ error: 'Erro ao atualizar configurações', details: error.message });
   }
@@ -1752,8 +1799,11 @@ app.post('/api/awards', async (req: Request, res: Response) => {
     
     // Verificar se o designer existe (para validar foreign key)
     try {
-      const userCheck = await pool.query('SELECT id FROM users WHERE id = $1', [designerId]);
-      if (userCheck.rows.length === 0) {
+      const userCheck = await queryOne(
+        useSQLite ? 'SELECT id FROM users WHERE id = ?' : 'SELECT id FROM users WHERE id = $1',
+        [designerId]
+      );
+      if (!userCheck) {
         console.error('Designer não encontrado:', designerId);
         return res.status(400).json({ error: 'Designer não encontrado no banco de dados' });
       }
@@ -1771,30 +1821,60 @@ app.post('/api/awards', async (req: Request, res: Response) => {
     console.log('Tentando inserir premiação:', { id, designerId, designerName, month, createdAt });
     
     try {
-      const result = await pool.query(
-        'INSERT INTO awards (id, designer_id, designer_name, month, description, image_url, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-        [id, designerId, designerName, month, description || '', imageUrl || null, createdAt]
-      );
-      
-      console.log('Premiação inserida com sucesso:', result.rows[0]);
-      
-      // Ativar flag de atualizações
-      try {
-        await pool.query('UPDATE system_settings SET awards_has_updates = true WHERE id = 1');
-      } catch (updateError) {
-        console.error('Erro ao atualizar flag de atualizações:', updateError);
+      if (useSQLite && db) {
+        // SQLite: inserir e depois buscar
+        db.prepare(
+          'INSERT INTO awards (id, designer_id, designer_name, month, description, image_url, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        ).run(id, designerId, designerName, month, description || '', imageUrl || null, createdAt);
+        
+        const inserted = await queryOne(
+          'SELECT * FROM awards WHERE id = ?',
+          [id]
+        );
+        
+        if (!inserted) {
+          throw new Error('Premiação inserida mas não encontrada');
+        }
+        
+        console.log('Premiação inserida com sucesso:', inserted);
+        
+        // Ativar flag de atualizações
+        try {
+          await execute('UPDATE system_settings SET awards_has_updates = 1 WHERE id = 1', []);
+        } catch (updateError) {
+          console.error('Erro ao atualizar flag de atualizações:', updateError);
+        }
+        
+        return res.json(convertNumericFields({ 
+          id: inserted.id, 
+          designerId: inserted.designer_id, 
+          designerName: inserted.designer_name, 
+          month: inserted.month, 
+          description: inserted.description || '', 
+          imageUrl: inserted.image_url || null, 
+          createdAt: inserted.created_at 
+        }, ['createdAt']));
+      } else {
+        // PostgreSQL (comentado para desenvolvimento local)
+        /*
+        const result = await pool.query(
+          'INSERT INTO awards (id, designer_id, designer_name, month, description, image_url, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
+          [id, designerId, designerName, month, description || '', imageUrl || null, createdAt]
+        );
+        
+        const inserted = result.rows[0];
+        return res.json({ 
+          id: inserted.id, 
+          designerId: inserted.designer_id, 
+          designerName: inserted.designer_name, 
+          month: inserted.month, 
+          description: inserted.description || '', 
+          imageUrl: inserted.image_url || null, 
+          createdAt: parseInt(inserted.created_at) 
+        });
+        */
+        throw new Error('PostgreSQL não disponível em desenvolvimento local');
       }
-      
-      const inserted = result.rows[0];
-      return res.json({ 
-        id: inserted.id, 
-        designerId: inserted.designer_id, 
-        designerName: inserted.designer_name, 
-        month: inserted.month, 
-        description: inserted.description || '', 
-        imageUrl: inserted.image_url || null, 
-        createdAt: parseInt(inserted.created_at) 
-      });
     } catch (dbError: any) {
       // Erro específico do banco de dados
       console.error('Erro SQL ao criar premiação:', {
@@ -1805,32 +1885,32 @@ app.post('/api/awards', async (req: Request, res: Response) => {
       });
       
       // Verificar se é erro de tabela não encontrada
-      if (dbError.code === '42P01') {
+      if (dbError.message?.includes('no such table') || dbError.code === '42P01') {
         return res.status(500).json({ 
           error: 'Tabela awards não encontrada no banco de dados',
-          details: 'Execute o SQL de criação da tabela awards no seu banco de dados Neon. Código do erro: 42P01'
+          details: 'Execute o SQL de criação da tabela awards no seu banco de dados. Código do erro: 42P01'
         });
       }
       
-      // Verificar se é erro de foreign key
-      if (dbError.code === '23503') {
+      // Verificar se é erro de foreign key (SQLite: SQLITE_CONSTRAINT_FOREIGNKEY)
+      if (dbError.code === '23503' || dbError.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
         return res.status(400).json({ 
           error: 'Designer inválido',
-          details: `O designer selecionado não existe no banco de dados. Código do erro: 23503. Detalhes: ${dbError.detail || dbError.message}`
+          details: `O designer selecionado não existe no banco de dados. Código do erro: ${dbError.code}. Detalhes: ${dbError.message}`
         });
       }
       
-      // Verificar se é erro de constraint
-      if (dbError.code === '23505') {
+      // Verificar se é erro de constraint (SQLite: SQLITE_CONSTRAINT_UNIQUE)
+      if (dbError.code === '23505' || dbError.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         return res.status(400).json({ 
           error: 'Premiação duplicada',
-          details: `Já existe uma premiação com esses dados. Código do erro: 23505`
+          details: `Já existe uma premiação com esses dados. Código do erro: ${dbError.code}`
         });
       }
       
       return res.status(500).json({ 
         error: 'Erro ao criar premiação no banco de dados',
-        details: `Código: ${dbError.code || 'N/A'}, Mensagem: ${dbError.message || 'Erro desconhecido'}, Detalhes: ${dbError.detail || 'N/A'}`
+        details: `Código: ${dbError.code || 'N/A'}, Mensagem: ${dbError.message || 'Erro desconhecido'}`
       });
     }
   } catch (error: any) {
@@ -1845,11 +1925,17 @@ app.post('/api/awards', async (req: Request, res: Response) => {
 app.delete('/api/awards/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM awards WHERE id = $1', [id]);
+    await execute(
+      useSQLite ? 'DELETE FROM awards WHERE id = ?' : 'DELETE FROM awards WHERE id = $1',
+      [id]
+    );
     
     // Ativar flag de atualizações
     try {
-      await pool.query('UPDATE system_settings SET awards_has_updates = true WHERE id = 1');
+      await execute(
+        useSQLite ? 'UPDATE system_settings SET awards_has_updates = 1 WHERE id = 1' : 'UPDATE system_settings SET awards_has_updates = true WHERE id = 1',
+        []
+      );
     } catch (updateError) {
       console.error('Erro ao atualizar flag de atualizações:', updateError);
     }
@@ -1863,7 +1949,10 @@ app.delete('/api/awards/:id', async (req: Request, res: Response) => {
 // Rota para resetar flag de atualizações de premiações
 app.put('/api/awards/reset-updates', async (req: Request, res: Response) => {
   try {
-    await pool.query('UPDATE system_settings SET awards_has_updates = false WHERE id = 1');
+    await execute(
+      useSQLite ? 'UPDATE system_settings SET awards_has_updates = 0 WHERE id = 1' : 'UPDATE system_settings SET awards_has_updates = false WHERE id = 1',
+      []
+    );
     return res.json({ success: true });
   } catch (error: any) {
     console.error('Erro ao resetar flag de atualizações:', error);
@@ -2290,8 +2379,14 @@ app.delete('/api/tags/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     // Deletar associações primeiro
-    await pool.query('DELETE FROM link_tags WHERE tag_id = $1', [id]);
-    await pool.query('DELETE FROM tags WHERE id = $1', [id]);
+    await execute(
+      useSQLite ? 'DELETE FROM link_tags WHERE tag_id = ?' : 'DELETE FROM link_tags WHERE tag_id = $1',
+      [id]
+    );
+    await execute(
+      useSQLite ? 'DELETE FROM tags WHERE id = ?' : 'DELETE FROM tags WHERE id = $1',
+      [id]
+    );
     return res.json({ success: true });
   } catch (error: any) {
     console.error('Erro ao remover tag:', error);
@@ -2302,73 +2397,75 @@ app.delete('/api/tags/:id', async (req: Request, res: Response) => {
 // ============ DESIGNER NOTIFICATIONS ============
 app.get('/api/designer-notifications', async (req: Request, res: Response) => {
   try {
-    const result = await pool.query(`
-      SELECT 
-        dn.*,
-        u.name as designer_name
-      FROM designer_notifications dn
-      LEFT JOIN users u ON dn.designer_id = u.id
-      ORDER BY dn.created_at DESC
-    `);
-    return res.json(result.rows.map(row => {
-      // Converter created_at e updated_at para número (timestamp ou bigint)
+    // SQLite e PostgreSQL usam a mesma sintaxe para LEFT JOIN
+    const result = await query(
+      'SELECT dn.*, u.name as designer_name FROM designer_notifications dn LEFT JOIN users u ON dn.designer_id = u.id ORDER BY dn.created_at DESC',
+      []
+    );
+    
+    return res.json(result.map(row => {
+      // Converter created_at e updated_at para número
       let createdAt = row.created_at;
       let updatedAt = row.updated_at;
       
       if (createdAt instanceof Date) {
         createdAt = createdAt.getTime();
       } else if (typeof createdAt === 'string') {
-        createdAt = new Date(createdAt).getTime();
-      } else if (typeof createdAt === 'number') {
-        // Já é número
-      } else {
+        const parsed = new Date(createdAt).getTime();
+        createdAt = isNaN(parsed) ? Date.now() : parsed;
+      } else if (typeof createdAt !== 'number') {
         createdAt = Date.now();
       }
       
       if (updatedAt instanceof Date) {
         updatedAt = updatedAt.getTime();
       } else if (typeof updatedAt === 'string') {
-        updatedAt = new Date(updatedAt).getTime();
-      } else if (typeof updatedAt === 'number') {
-        // Já é número
-      } else {
+        const parsed = new Date(updatedAt).getTime();
+        updatedAt = isNaN(parsed) ? Date.now() : parsed;
+      } else if (typeof updatedAt !== 'number') {
         updatedAt = Date.now();
       }
       
-      // Verificar se enabled existe ou se é 'active'
-      const enabled = row.enabled !== undefined ? row.enabled : (row.active !== undefined ? row.active : true);
+      // Converter enabled para boolean (SQLite retorna 0/1)
+      const enabled = row.enabled === 1 || row.enabled === '1' || row.enabled === true;
       
       return {
         id: String(row.id),
         designerId: String(row.designer_id),
-        designerName: row.designer_name,
+        designerName: row.designer_name || null,
         type: row.type,
-        h1: row.h1,
-        h2: row.h2,
-        h3: row.h3,
+        h1: row.h1 || null,
+        h2: row.h2 || null,
+        h3: row.h3 || null,
         enabled: enabled,
         createdAt: Number(createdAt),
         updatedAt: Number(updatedAt)
       };
     }));
-  } catch (error) {
+  } catch (error: any) {
+    // Se a tabela não existe, retornar array vazio
+    if (error.message?.includes('no such table') || error.code === '42P01') {
+      return res.json([]);
+    }
     console.error('Erro ao buscar notificações:', error);
-    return res.status(500).json({ error: 'Erro ao buscar notificações' });
+    return res.status(500).json({ error: 'Erro ao buscar notificações', details: error?.message });
   }
 });
 
 app.get('/api/designer-notifications/designer/:designerId', async (req: Request, res: Response) => {
   try {
     const { designerId } = req.params;
-    const result = await pool.query(
-      'SELECT * FROM designer_notifications WHERE designer_id = $1 AND enabled = true ORDER BY created_at DESC LIMIT 1',
+    const result = await query(
+      useSQLite
+        ? 'SELECT * FROM designer_notifications WHERE designer_id = ? AND enabled = 1 ORDER BY created_at DESC LIMIT 1'
+        : 'SELECT * FROM designer_notifications WHERE designer_id = $1 AND enabled = true ORDER BY created_at DESC LIMIT 1',
       [designerId]
     );
-    if (result.rows.length === 0) {
+    if (result.length === 0) {
       return res.status(404).json({ error: 'Notificação não encontrada' });
     }
-    const row = result.rows[0];
-    return res.json({
+    const row = result[0];
+    return res.json(convertNumericFields({
       id: row.id,
       designerId: row.designer_id,
       type: row.type,
@@ -2376,9 +2473,9 @@ app.get('/api/designer-notifications/designer/:designerId', async (req: Request,
       h2: row.h2,
       h3: row.h3,
       enabled: row.enabled,
-      createdAt: parseInt(row.created_at),
-      updatedAt: parseInt(row.updated_at)
-    });
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }, ['createdAt', 'updatedAt']));
   } catch (error) {
     console.error('Erro ao buscar notificação do designer:', error);
     return res.status(500).json({ error: 'Erro ao buscar notificação' });
@@ -2406,12 +2503,15 @@ app.post('/api/designer-notifications', async (req: Request, res: Response) => {
     }
     
     // Verificar se o designer existe
-    const designerCheck = await pool.query('SELECT id FROM users WHERE id = $1', [designerId]);
-    if (designerCheck.rows.length === 0) {
+    const designerCheck = await queryOne(
+      useSQLite ? 'SELECT id FROM users WHERE id = ?' : 'SELECT id FROM users WHERE id = $1',
+      [designerId]
+    );
+    if (!designerCheck) {
       console.error('❌ Designer não encontrado:', designerId);
       return res.status(404).json({ error: 'Designer não encontrado' });
     }
-    console.log('✅ Designer encontrado:', designerCheck.rows[0].id);
+    console.log('✅ Designer encontrado:', designerCheck.id);
     
     // Verificar se pelo menos um campo de conteúdo está preenchido
     if (!h1?.trim() && !h2?.trim() && !h3?.trim()) {
@@ -2426,95 +2526,79 @@ app.post('/api/designer-notifications', async (req: Request, res: Response) => {
     console.log('📋 Valores:', { id, designerId, type, h1: h1?.trim() || null, h2: h2?.trim() || null, h3: h3?.trim() || null, enabled: enabled !== false, now });
     
     try {
-      // Verificar estrutura da tabela para saber se created_at/updated_at são timestamp ou bigint
-      const tableInfo = await pool.query(`
-        SELECT data_type 
-        FROM information_schema.columns 
-        WHERE table_name = 'designer_notifications' 
-        AND column_name = 'created_at'
-      `);
-      
-      const isTimestamp = tableInfo.rows.length > 0 && 
-                         (tableInfo.rows[0].data_type === 'timestamp without time zone' || 
-                          tableInfo.rows[0].data_type === 'timestamp with time zone');
-      
-      let createdAtValue, updatedAtValue;
-      
-      if (isTimestamp) {
-        // Se for timestamp, converter número para Date
-        createdAtValue = new Date(now);
-        updatedAtValue = new Date(now);
+      if (useSQLite && db) {
+        // SQLite: usar número diretamente para created_at e updated_at
+        db.prepare(
+          'INSERT INTO designer_notifications (id, designer_id, type, h1, h2, h3, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(
+          id, designerId, type, h1?.trim() || null, h2?.trim() || null, h3?.trim() || null, enabled !== false ? 1 : 0, now, now
+        );
       } else {
-        // Se for bigint, usar número diretamente
-        createdAtValue = now;
-        updatedAtValue = now;
+        // PostgreSQL (comentado para desenvolvimento local)
+        /*
+        const tableInfo = await pool.query(`
+          SELECT data_type 
+          FROM information_schema.columns 
+          WHERE table_name = 'designer_notifications' 
+          AND column_name = 'created_at'
+        `);
+        
+        const isTimestamp = tableInfo.rows.length > 0 && 
+                           (tableInfo.rows[0].data_type === 'timestamp without time zone' || 
+                            tableInfo.rows[0].data_type === 'timestamp with time zone');
+        
+        let createdAtValue, updatedAtValue;
+        
+        if (isTimestamp) {
+          createdAtValue = new Date(now);
+          updatedAtValue = new Date(now);
+        } else {
+          createdAtValue = now;
+          updatedAtValue = now;
+        }
+        
+        const enabledColumnInfo = await pool.query(`
+          SELECT column_name 
+          FROM information_schema.columns 
+          WHERE table_name = 'designer_notifications' 
+          AND (column_name = 'enabled' OR column_name = 'active')
+          LIMIT 1
+        `);
+        
+        const enabledColumnName = enabledColumnInfo.rows.length > 0 
+          ? enabledColumnInfo.rows[0].column_name 
+          : 'enabled';
+        
+        const columnName = enabledColumnName === 'active' ? 'active' : 'enabled';
+        await pool.query(
+          `INSERT INTO designer_notifications (id, designer_id, type, h1, h2, h3, ${columnName}, created_at, updated_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+          [id, designerId, type, h1?.trim() || null, h2?.trim() || null, h3?.trim() || null, enabled !== false, createdAtValue, updatedAtValue]
+        );
+        */
+        throw new Error('PostgreSQL não disponível em desenvolvimento local');
       }
-      
-      // Verificar se a coluna é 'enabled' ou 'active'
-      const enabledColumnInfo = await pool.query(`
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = 'designer_notifications' 
-        AND (column_name = 'enabled' OR column_name = 'active')
-        LIMIT 1
-      `);
-      
-      const enabledColumnName = enabledColumnInfo.rows.length > 0 
-        ? enabledColumnInfo.rows[0].column_name 
-        : 'enabled';
-      
-      // Construir query de forma segura
-      const columnName = enabledColumnName === 'active' ? 'active' : 'enabled';
-      await pool.query(
-        `INSERT INTO designer_notifications (id, designer_id, type, h1, h2, h3, ${columnName}, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [id, designerId, type, h1?.trim() || null, h2?.trim() || null, h3?.trim() || null, enabled !== false, createdAtValue, updatedAtValue]
-      );
     } catch (insertError: any) {
       console.error('❌ Erro ao inserir no banco:', insertError);
       console.error('❌ Código do erro:', insertError?.code);
       console.error('❌ Mensagem:', insertError?.message);
-      console.error('❌ Detalhes:', insertError?.detail);
       throw insertError;
     }
     console.log('✅ Notificação inserida com sucesso, ID:', id);
     
-    const result = await pool.query('SELECT * FROM designer_notifications WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
+    const row = await queryOne(
+      useSQLite ? 'SELECT * FROM designer_notifications WHERE id = ?' : 'SELECT * FROM designer_notifications WHERE id = $1',
+      [id]
+    );
+    if (!row) {
       console.error('❌ Notificação criada mas não encontrada após inserção');
       return res.status(500).json({ error: 'Notificação criada mas não foi possível recuperá-la' });
     }
     
-    const row = result.rows[0];
-    
-    // Converter created_at e updated_at para número
-    let createdAt = row.created_at;
-    let updatedAt = row.updated_at;
-    
-    if (createdAt instanceof Date) {
-      createdAt = createdAt.getTime();
-    } else if (typeof createdAt === 'string') {
-      createdAt = new Date(createdAt).getTime();
-    } else if (typeof createdAt === 'number') {
-      // Já é número
-    } else {
-      createdAt = Date.now();
-    }
-    
-    if (updatedAt instanceof Date) {
-      updatedAt = updatedAt.getTime();
-    } else if (typeof updatedAt === 'string') {
-      updatedAt = new Date(updatedAt).getTime();
-    } else if (typeof updatedAt === 'number') {
-      // Já é número
-    } else {
-      updatedAt = Date.now();
-    }
-    
-    const notificationEnabled = row.enabled !== undefined ? row.enabled : (row.active !== undefined ? row.active : true);
+    const notificationEnabled = row.enabled !== undefined ? (row.enabled === 1 || row.enabled === '1' || row.enabled === true) : (row.active !== undefined ? (row.active === 1 || row.active === '1' || row.active === true) : true);
     
     console.log('✅ Notificação criada com sucesso:', row.id);
-    return res.json({
+    return res.json(convertNumericFields({
       id: String(row.id),
       designerId: String(row.designer_id),
       type: row.type,
@@ -2522,14 +2606,14 @@ app.post('/api/designer-notifications', async (req: Request, res: Response) => {
       h2: row.h2,
       h3: row.h3,
       enabled: notificationEnabled,
-      createdAt: Number(createdAt),
-      updatedAt: Number(updatedAt)
-    });
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }, ['createdAt', 'updatedAt']));
   } catch (error: any) {
     console.error('Erro ao criar notificação:', error);
     
     // Verificar se é erro de tabela não encontrada
-    if (error?.code === '42P01' || error?.message?.includes('does not exist')) {
+    if (error?.code === '42P01' || error?.message?.includes('does not exist') || error?.message?.includes('no such table')) {
       return res.status(500).json({ 
         error: 'Tabela designer_notifications não encontrada. Execute o script SQL create_designer_notifications_table.sql no banco de dados.',
         details: error?.message 
@@ -2537,7 +2621,7 @@ app.post('/api/designer-notifications', async (req: Request, res: Response) => {
     }
     
     // Verificar se é erro de foreign key
-    if (error?.code === '23503') {
+    if (error?.code === '23503' || error?.code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
       return res.status(400).json({ 
         error: 'Designer não encontrado ou inválido',
         details: error?.message 
@@ -2545,7 +2629,7 @@ app.post('/api/designer-notifications', async (req: Request, res: Response) => {
     }
     
     // Verificar se é erro de constraint
-    if (error?.code === '23514') {
+    if (error?.code === '23514' || error?.code === 'SQLITE_CONSTRAINT_CHECK') {
       return res.status(400).json({ 
         error: 'Tipo de notificação inválido. Use: common, important ou urgent',
         details: error?.message 
@@ -2564,28 +2648,30 @@ app.put('/api/designer-notifications/:id', async (req: Request, res: Response) =
     const { id } = req.params;
     const { type, h1, h2, h3, enabled } = req.body;
     const now = Date.now();
-    await pool.query(
-      `UPDATE designer_notifications 
-       SET type = $1, h1 = $2, h2 = $3, h3 = $4, enabled = $5, updated_at = $6
-       WHERE id = $7`,
-      [type, h1 || null, h2 || null, h3 || null, enabled !== false, now, id]
+    await execute(
+      useSQLite
+        ? 'UPDATE designer_notifications SET type = ?, h1 = ?, h2 = ?, h3 = ?, enabled = ?, updated_at = ? WHERE id = ?'
+        : 'UPDATE designer_notifications SET type = $1, h1 = $2, h2 = $3, h3 = $4, enabled = $5, updated_at = $6 WHERE id = $7',
+      [type, h1 || null, h2 || null, h3 || null, enabled !== false ? (useSQLite ? 1 : true) : (useSQLite ? 0 : false), now, id]
     );
-    const result = await pool.query('SELECT * FROM designer_notifications WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
+    const row = await queryOne(
+      useSQLite ? 'SELECT * FROM designer_notifications WHERE id = ?' : 'SELECT * FROM designer_notifications WHERE id = $1',
+      [id]
+    );
+    if (!row) {
       return res.status(404).json({ error: 'Notificação não encontrada' });
     }
-    const row = result.rows[0];
-    return res.json({
+    return res.json(convertNumericFields({
       id: row.id,
       designerId: row.designer_id,
       type: row.type,
       h1: row.h1,
       h2: row.h2,
       h3: row.h3,
-      enabled: row.enabled,
-      createdAt: parseInt(row.created_at),
-      updatedAt: parseInt(row.updated_at)
-    });
+      enabled: row.enabled === 1 || row.enabled === '1' || row.enabled === true,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }, ['createdAt', 'updatedAt']));
   } catch (error: any) {
     console.error('Erro ao atualizar notificação:', error);
     return res.status(500).json({ error: 'Erro ao atualizar notificação', details: error?.message });
@@ -2597,26 +2683,30 @@ app.patch('/api/designer-notifications/:id/toggle', async (req: Request, res: Re
     const { id } = req.params;
     const { enabled } = req.body;
     const now = Date.now();
-    await pool.query(
-      'UPDATE designer_notifications SET enabled = $1, updated_at = $2 WHERE id = $3',
-      [enabled, now, id]
+    await execute(
+      useSQLite
+        ? 'UPDATE designer_notifications SET enabled = ?, updated_at = ? WHERE id = ?'
+        : 'UPDATE designer_notifications SET enabled = $1, updated_at = $2 WHERE id = $3',
+      [enabled ? (useSQLite ? 1 : true) : (useSQLite ? 0 : false), now, id]
     );
-    const result = await pool.query('SELECT * FROM designer_notifications WHERE id = $1', [id]);
-    if (result.rows.length === 0) {
+    const row = await queryOne(
+      useSQLite ? 'SELECT * FROM designer_notifications WHERE id = ?' : 'SELECT * FROM designer_notifications WHERE id = $1',
+      [id]
+    );
+    if (!row) {
       return res.status(404).json({ error: 'Notificação não encontrada' });
     }
-    const row = result.rows[0];
-    return res.json({
+    return res.json(convertNumericFields({
       id: row.id,
       designerId: row.designer_id,
       type: row.type,
       h1: row.h1,
       h2: row.h2,
       h3: row.h3,
-      enabled: row.enabled,
-      createdAt: parseInt(row.created_at),
-      updatedAt: parseInt(row.updated_at)
-    });
+      enabled: row.enabled === 1 || row.enabled === '1' || row.enabled === true,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }, ['createdAt', 'updatedAt']));
   } catch (error: any) {
     console.error('Erro ao alterar status da notificação:', error);
     return res.status(500).json({ error: 'Erro ao alterar status', details: error?.message });
@@ -2626,7 +2716,10 @@ app.patch('/api/designer-notifications/:id/toggle', async (req: Request, res: Re
 app.delete('/api/designer-notifications/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    await pool.query('DELETE FROM designer_notifications WHERE id = $1', [id]);
+    await execute(
+      useSQLite ? 'DELETE FROM designer_notifications WHERE id = ?' : 'DELETE FROM designer_notifications WHERE id = $1',
+      [id]
+    );
     return res.json({ success: true });
   } catch (error: any) {
     console.error('Erro ao deletar notificação:', error);

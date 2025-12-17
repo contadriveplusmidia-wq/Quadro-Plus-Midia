@@ -110,8 +110,8 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
     return colors[index % colors.length];
   };
 
-  // Calcular designers que bateram a meta na semana (em qualquer dia)
-  const designersWhoHitGoalThisWeek = useMemo(() => {
+  // Calcular todos os designers que têm demandas na semana (não apenas os que bateram a meta)
+  const designersWithDemandsThisWeek = useMemo(() => {
     const weekStart = new Date(startDate);
     weekStart.setHours(0, 0, 0, 0);
     const weekEnd = new Date(endDate);
@@ -123,36 +123,14 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
       return demandTime >= weekStart.getTime() && demandTime <= weekEnd.getTime();
     });
 
-    // Agrupar por designer e calcular artes por dia (usando timestamp do início do dia como chave)
-    const designerDailyArts: Record<string, Record<number, number>> = {};
+    // Encontrar todos os designers únicos que têm demandas na semana
+    const designerIds = new Set<string>();
     weekDemands.forEach(demand => {
-      const demandDate = new Date(demand.timestamp);
-      const dayStart = new Date(demandDate.getFullYear(), demandDate.getMonth(), demandDate.getDate());
-      dayStart.setHours(0, 0, 0, 0);
-      const dayKey = dayStart.getTime(); // Usar timestamp do início do dia como chave
-      
-      if (!designerDailyArts[demand.userId]) {
-        designerDailyArts[demand.userId] = {};
-      }
-      if (!designerDailyArts[demand.userId][dayKey]) {
-        designerDailyArts[demand.userId][dayKey] = 0;
-      }
-      const quantity = Number(demand.totalQuantity) || 0;
-      designerDailyArts[demand.userId][dayKey] += quantity;
+      designerIds.add(demand.userId);
     });
 
-    // Encontrar designers que bateram a meta em pelo menos um dia
-    const designersWhoHit: Set<string> = new Set();
-    Object.entries(designerDailyArts).forEach(([designerId, dailyCounts]) => {
-      const hasHitGoal = Object.values(dailyCounts).some(count => count >= dailyGoal);
-      if (hasHitGoal) {
-        designersWhoHit.add(designerId);
-      }
-    });
-
-    // Retornar lista de designers com informações
-    // IMPORTANTE: Incluir todos os designers ativos que bateram a meta
-    const result = Array.from(designersWhoHit).map(designerId => {
+    // Retornar lista de todos os designers com demandas na semana
+    const result = Array.from(designerIds).map(designerId => {
       const designer = designers.find(d => d.id === designerId);
       if (!designer) return null;
       return {
@@ -167,7 +145,7 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
     }>;
     
     return result;
-  }, [demands, designers, startDate, endDate, dailyGoal]);
+  }, [demands, designers, startDate, endDate]);
 
   // Calcular dados por dia da semana
   const weekData = useMemo(() => {
@@ -210,9 +188,9 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
           designerArts[demand.userId].count += quantity;
         });
 
-        // Mostrar todos os designers que bateram a meta na semana (em qualquer dia)
-        // Mas mostrar a quantidade de artes do dia específico
-        const designersForDay = designersWhoHitGoalThisWeek.map(designer => {
+        // Mostrar TODOS os designers que têm demandas na semana
+        // Sempre mostrar a barra, mas ocultar o nome quando não bater a meta
+        const designersForDay = designersWithDemandsThisWeek.map(designer => {
           const dayCount = Number(designerArts[designer.designerId]?.count || 0);
           const hitGoalToday = dayCount >= dailyGoal;
           
@@ -223,7 +201,7 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
             color: designer.color,
             hitGoalToday // Flag para indicar se bateu a meta neste dia específico
           };
-        }).filter(d => !isNaN(d.artsCount)).sort((a, b) => {
+        }).filter(d => !isNaN(d.artsCount) && d.artsCount > 0).sort((a, b) => {
           // Ordenar: primeiro os que bateram hoje, depois por quantidade
           if (a.hitGoalToday && !b.hitGoalToday) return -1;
           if (!a.hitGoalToday && b.hitGoalToday) return 1;
@@ -245,7 +223,7 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
     }
 
     return days;
-  }, [demands, designers, startDate, endDate, dailyGoal, designersWhoHitGoalThisWeek]);
+  }, [demands, designers, startDate, endDate, dailyGoal, designersWithDemandsThisWeek]);
 
   // Formatar data para exibição
   const formatDateRange = () => {
@@ -411,28 +389,29 @@ export const DailyGoalChart: React.FC<DailyGoalChartProps> = ({
                                   });
                                   navigate('/admin/history');
                                 }}
-                                className={`w-full rounded transition-all duration-200 cursor-pointer flex items-center justify-center relative overflow-hidden hover:opacity-100 ${
-                                  !designer.hitGoalToday ? 'opacity-40' : ''
-                                }`}
+                                className={`w-full rounded transition-all duration-200 cursor-pointer flex items-center justify-center relative overflow-hidden hover:opacity-100`}
                                 style={{
                                   backgroundColor: designer.color,
                                   height: designer.artsCount > 0 
                                     ? `${Math.min(100, (designer.artsCount / (dailyGoal * 2)) * 100)}%`
                                     : '32px',
                                   minHeight: '32px',
-                                  opacity: isHovered ? 1 : (designer.hitGoalToday ? 0.85 : 0.4)
+                                  // Opacidade: sempre visível, mas um pouco mais transparente quando não bateu a meta
+                                  opacity: isHovered ? 1 : (designer.hitGoalToday ? 0.9 : 0.6)
                                 }}
                                 title={`Clique para ver demandas de ${designer.designerName}${designer.hitGoalToday ? ' (Meta batida hoje)' : ' (Meta não batida hoje)'}`}
                               >
-                                {/* Nome do designer na barra */}
-                                <span 
-                                  className="text-xs font-semibold text-white px-1.5 py-0.5 truncate w-full text-center"
-                                  style={{
-                                    textShadow: '0 1px 2px rgba(0,0,0,0.3)'
-                                  }}
-                                >
-                                  {designer.designerName}
-                                </span>
+                                {/* Nome do designer na barra - apenas quando bater a meta */}
+                                {designer.hitGoalToday && (
+                                  <span 
+                                    className="text-xs font-semibold text-white px-1.5 py-0.5 truncate w-full text-center"
+                                    style={{
+                                      textShadow: '0 1px 2px rgba(0,0,0,0.3)'
+                                    }}
+                                  >
+                                    {designer.designerName}
+                                  </span>
+                                )}
                               </div>
                               
                               {/* Tooltip no hover */}

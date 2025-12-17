@@ -5,7 +5,7 @@ import { ImageModal } from '../components/ImageModal';
 import { autoFocus } from '../utils/autoFocus';
 
 export const AdminFeedbacks: React.FC = () => {
-  const { currentUser, users, feedbacks, addFeedback, deleteFeedback } = useApp();
+  const { currentUser, users, feedbacks, addFeedback, deleteFeedback, refreshData } = useApp();
   const [showModal, setShowModal] = useState(false);
   const [selectedDesigner, setSelectedDesigner] = useState('');
   const [comment, setComment] = useState('');
@@ -43,18 +43,26 @@ export const AdminFeedbacks: React.FC = () => {
     const designer = designers.find(d => d.id === selectedDesigner);
     if (!designer) return;
 
-    await addFeedback({
-      designerId: selectedDesigner,
-      designerName: designer.name,
-      adminName: currentUser.name,
-      imageUrls: images,
-      comment
-    });
+    try {
+      await addFeedback({
+        designerId: selectedDesigner,
+        designerName: designer.name,
+        adminName: currentUser.name,
+        imageUrls: images,
+        comment
+      });
 
-    setShowModal(false);
-    setSelectedDesigner('');
-    setComment('');
-    setImages([]);
+      // Recarregar dados para garantir sincronização
+      await refreshData();
+
+      setShowModal(false);
+      setSelectedDesigner('');
+      setComment('');
+      setImages([]);
+    } catch (error: any) {
+      console.error('Erro ao criar feedback:', error);
+      alert(error?.message || 'Erro ao criar feedback. Tente novamente.');
+    }
   };
 
   const handleDelete = async (id: string) => {

@@ -76,45 +76,9 @@ export const AdminSettings: React.FC = () => {
       console.log('Salvando configurações:', settingsToSave);
       console.log('Valores atuais dos estados:', { variationPoints, dailyArtGoal });
       await updateSettings(settingsToSave);
-      // Aguardar um pouco para garantir que o servidor processou
-      await new Promise(resolve => setTimeout(resolve, 300));
-      // Recarregar settings para garantir sincronização
-      const settingsRes = await fetch('/api/settings');
-      if (settingsRes.ok) {
-        const updatedSettings = await settingsRes.json();
-        console.log('Settings recarregados do servidor:', updatedSettings);
-        // Atualizar estados locais com os valores salvos
-        if (updatedSettings.variationPoints !== undefined) setVariationPoints(updatedSettings.variationPoints);
-        if (updatedSettings.dailyArtGoal !== undefined) setDailyArtGoal(updatedSettings.dailyArtGoal);
-      }
       
-      // Forçar atualização imediata do favicon no navegador
-      if (faviconUrl) {
-        // Remover todos os favicons existentes
-        const existingLinks = document.querySelectorAll("link[rel='icon'], link[rel='shortcut icon']");
-        existingLinks.forEach(link => link.remove());
-        
-        // Criar novo link para favicon com timestamp
-        const link = document.createElement('link');
-        link.rel = 'icon';
-        
-        const versionedFavicon = faviconUrl.startsWith('data:')
-          ? faviconUrl // Base64 não pode ter query params
-          : `${faviconUrl}${faviconUrl.includes('?') ? '&' : '?'}v=${Date.now()}`;
-        
-        link.href = versionedFavicon;
-        
-        // Detectar e definir tipo de imagem
-        if (faviconUrl.startsWith('data:')) {
-          const match = faviconUrl.match(/data:image\/(\w+);/);
-          link.type = match ? `image/${match[1]}` : 'image/x-icon';
-        } else {
-          link.type = 'image/x-icon';
-        }
-        
-        // Adicionar ao head
-        document.getElementsByTagName('head')[0].appendChild(link);
-      }
+      // O AppContext já atualiza o favicon automaticamente via useEffect quando settings.faviconUrl muda
+      // Não precisamos fazer nada manual aqui
       
       alert('Configurações salvas com sucesso!');
     } catch (error) {
@@ -157,15 +121,20 @@ export const AdminSettings: React.FC = () => {
     if (!userName) return;
 
     if (editingUser) {
-      await updateUser(editingUser.id, { 
+      // Se está editando, só enviar senha se ela foi preenchida (não vazia)
+      const updateData: any = { 
         name: userName, 
-        password: userPassword || undefined,
         avatarColor: userColor 
-      });
+      };
+      // Só adicionar password se foi preenchida (não vazia e não apenas espaços)
+      if (userPassword && userPassword.trim().length > 0) {
+        updateData.password = userPassword.trim();
+      }
+      await updateUser(editingUser.id, updateData);
     } else {
       await addUser({ 
         name: userName, 
-        password: userPassword || '123',
+        password: userPassword && userPassword.trim().length > 0 ? userPassword.trim() : '123',
         role: 'DESIGNER',
         avatarColor: userColor,
         active: true

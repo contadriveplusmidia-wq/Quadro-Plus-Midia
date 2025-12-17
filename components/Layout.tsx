@@ -64,8 +64,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (!sidebarCollapsed) {
       // Aguardar animação de expansão completar
       setTimeout(() => {
-        const { autoFocus } = require('../utils/autoFocus');
-        autoFocus(document.querySelector('aside'), 200);
+        import('../utils/autoFocus').then(({ autoFocus }) => {
+          autoFocus(document.querySelector('aside'), 200);
+        }).catch(console.error);
       }, 300);
     }
   }, [sidebarCollapsed]);
