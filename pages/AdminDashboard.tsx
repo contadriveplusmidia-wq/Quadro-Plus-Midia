@@ -7,7 +7,7 @@ import { HistoryCharts } from '../components/HistoryCharts';
 import { DailyGoalChart } from '../components/DailyGoalChart';
 
 type ChartMode = 'somaPoints' | 'somaArts' | 'mediaPoints' | 'mediaArts';
-type DateFilterType = 'hoje' | 'semana' | 'mes' | 'custom';
+type DateFilterType = 'hoje' | 'semana' | 'semanaPassada' | 'mes' | 'custom';
 
 // Componente de Tooltip customizado com tema
 interface CustomTooltipProps {
@@ -70,6 +70,7 @@ export const AdminDashboard: React.FC = () => {
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [selectedCard, setSelectedCard] = useState<string | null>(null);
 
   // Estado para forçar re-render e atualizar status periodicamente
   const [, setRefreshStatus] = useState(0);
@@ -230,6 +231,30 @@ export const AdminDashboard: React.FC = () => {
         
         return { start: weekStart.getTime(), end: weekEnd.getTime() };
       }
+      case 'semanaPassada': {
+        // FILTRO "SEMANA PASSADA": calcula semana passada de DOMINGO a SÁBADO usando timezone local
+        const dayOfWeek = today.getDay();
+        
+        // Calcular quantos dias subtrair para chegar ao domingo da semana atual
+        const daysToSubtract = dayOfWeek;
+        
+        // Início da semana atual = domingo (00:00:00)
+        const currentWeekStart = new Date(today);
+        currentWeekStart.setDate(currentWeekStart.getDate() - daysToSubtract);
+        currentWeekStart.setHours(0, 0, 0, 0);
+        
+        // Início da semana passada = 7 dias antes do início da semana atual
+        const lastWeekStart = new Date(currentWeekStart);
+        lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+        lastWeekStart.setHours(0, 0, 0, 0);
+        
+        // Fim da semana passada = sábado (23:59:59.999) - 6 dias após o domingo da semana passada
+        const lastWeekEnd = new Date(lastWeekStart);
+        lastWeekEnd.setDate(lastWeekEnd.getDate() + 6);
+        lastWeekEnd.setHours(23, 59, 59, 999);
+        
+        return { start: lastWeekStart.getTime(), end: lastWeekEnd.getTime() };
+      }
       case 'mes': {
         // FILTRO "MÊS": primeiro e último dia do mês atual no timezone local
         // new Date(year, month, 1) = primeiro dia do mês
@@ -290,7 +315,8 @@ export const AdminDashboard: React.FC = () => {
     const endDate = new Date(end);
     while (current <= endDate) {
       const day = current.getDay();
-      if (day !== 0) count++;
+      // Contar apenas dias úteis: Segunda (1) a Sábado (6), excluindo Domingo (0)
+      if (day >= 1 && day <= 6) count++;
       current.setDate(current.getDate() + 1);
     }
     return count || 1;
@@ -306,6 +332,71 @@ export const AdminDashboard: React.FC = () => {
     return filtered;
   }, [demands, selectedDesigner, dateFilter, customStartDate, customEndDate]);
 
+  // Função para determinar a classificação baseada na meta semanal
+  const getArtsPerformance = (totalArts: number, dailyGoal: number): 'ruim' | 'medio' | 'bom' => {
+    if (!dailyGoal || dailyGoal <= 0) return 'medio'; // Se não houver meta, retorna médio
+    
+    const weeklyGoal = dailyGoal * 6; // Meta semanal (6 dias úteis)
+    const percentage = (totalArts / weeklyGoal) * 100;
+    
+    if (percentage < 50) return 'ruim'; // Menos da metade
+    if (percentage < 100) return 'medio'; // Metade até 99%
+    return 'bom'; // 100% ou mais
+  };
+
+  // Função para determinar a classificação da média baseada na meta diária
+  const getAvgArtsPerformance = (avgArts: number, dailyGoal: number): 'ruim' | 'medio' | 'bom' => {
+    if (!dailyGoal || dailyGoal <= 0) return 'medio'; // Se não houver meta, retorna médio
+    
+    const percentage = (avgArts / dailyGoal) * 100;
+    
+    if (percentage < 50) return 'ruim'; // Menos da metade
+    if (percentage < 100) return 'medio'; // Metade até 99%
+    return 'bom'; // 100% ou mais
+  };
+
+  // Função para determinar a classificação da média geral do time (mais granular)
+  const getTeamAvgArtsPerformance = (avgArts: number, teamDailyGoal: number): 'muitoBaixo' | 'mediano' | 'proximo' | 'dentro' => {
+    if (!teamDailyGoal || teamDailyGoal <= 0) return 'mediano';
+    
+    const percentage = (avgArts / teamDailyGoal) * 100;
+    
+    if (percentage < 50) return 'muitoBaixo'; // Muito abaixo da meta (< 50%)
+    if (percentage < 75) return 'mediano'; // Mediano (50% a 74%)
+    if (percentage < 100) return 'proximo'; // Próximo da meta (75% a 99%)
+    return 'dentro'; // Dentro ou acima da meta (≥ 100%)
+  };
+
+  // Função para obter a cor do texto baseado na performance
+  const getPerformanceColor = (performance: 'ruim' | 'medio' | 'bom'): string => {
+    switch (performance) {
+      case 'ruim':
+        return 'text-red-600 dark:text-red-400';
+      case 'medio':
+        return 'text-amber-600 dark:text-amber-400';
+      case 'bom':
+        return 'text-green-600 dark:text-green-400';
+      default:
+        return 'text-slate-900 dark:text-white';
+    }
+  };
+
+  // Função para obter a cor do texto baseado na performance do time (mais granular)
+  const getTeamPerformanceColor = (performance: 'muitoBaixo' | 'mediano' | 'proximo' | 'dentro'): string => {
+    switch (performance) {
+      case 'muitoBaixo':
+        return 'text-red-600 dark:text-red-400';
+      case 'mediano':
+        return 'text-amber-600 dark:text-amber-400';
+      case 'proximo':
+        return 'text-orange-600 dark:text-orange-400';
+      case 'dentro':
+        return 'text-green-600 dark:text-green-400';
+      default:
+        return 'text-slate-900 dark:text-white';
+    }
+  };
+
   const stats = useMemo(() => {
     // Garantir que os valores são números
     const totalPoints = filteredDemands.reduce((acc, d) => {
@@ -318,11 +409,12 @@ export const AdminDashboard: React.FC = () => {
     }, 0);
     const totalDemands = filteredDemands.length;
 
-    const designerPoints: Record<string, { name: string; points: number }> = {};
+    const designerPoints: Record<string, { id: string; name: string; points: number }> = {};
     filteredDemands.forEach(d => {
       if (!designerPoints[d.userId]) {
         const designer = designers.find(des => des.id === d.userId);
         designerPoints[d.userId] = { 
+          id: d.userId,
           name: designer?.name.split(' - ')[1] || designer?.name || 'Designer',
           points: 0 
         };
@@ -331,15 +423,64 @@ export const AdminDashboard: React.FC = () => {
       designerPoints[d.userId].points += points;
     });
 
-    let topPerformer = { name: '-', points: 0 };
+    let topPerformer = { id: '', name: '-', points: 0 };
     Object.values(designerPoints).forEach(dp => {
       if (dp.points > topPerformer.points) {
         topPerformer = dp;
       }
     });
 
-    return { totalPoints, totalArts, totalDemands, topPerformer };
-  }, [filteredDemands, designers]);
+    // Calcular média de artes quando um designer estiver selecionado
+    let avgArts = 0;
+    if (selectedDesigner && selectedDesigner !== 'all') {
+      const { start, end } = getDateRange();
+      const workingDays = getWorkingDaysInRange(start, end);
+      avgArts = workingDays > 0 ? Math.round((totalArts / workingDays) * 10) / 10 : 0;
+    }
+
+    // Calcular média geral de artes quando "Todos os Designers" estiver selecionado
+    let teamAvgArts = 0;
+    if (selectedDesigner === 'all' || !selectedDesigner) {
+      const { start, end } = getDateRange();
+      const workingDays = getWorkingDaysInRange(start, end);
+      teamAvgArts = workingDays > 0 ? Math.round((totalArts / workingDays) * 10) / 10 : 0;
+    }
+
+    // Calcular quantos dias o top performer bateu a meta
+    let daysHitGoal = 0;
+    let totalWorkingDays = 0;
+    if (topPerformer.id && settings.dailyArtGoal && settings.dailyArtGoal > 0) {
+      const { start, end } = getDateRange();
+      totalWorkingDays = getWorkingDaysInRange(start, end);
+      
+      // Agrupar demandas do top performer por dia (apenas no período selecionado)
+      const topPerformerDemands = filteredDemands.filter(d => d.userId === topPerformer.id);
+      const demandsByDay: Record<string, number> = {};
+      
+      topPerformerDemands.forEach(d => {
+        const demandDate = new Date(d.timestamp);
+        const dayKey = `${demandDate.getFullYear()}-${String(demandDate.getMonth() + 1).padStart(2, '0')}-${String(demandDate.getDate()).padStart(2, '0')}`;
+        const dayOfWeek = demandDate.getDay();
+        
+        // Contar apenas dias úteis (Segunda a Sábado) e dentro do período
+        if (dayOfWeek >= 1 && dayOfWeek <= 6 && d.timestamp >= start && d.timestamp <= end) {
+          if (!demandsByDay[dayKey]) {
+            demandsByDay[dayKey] = 0;
+          }
+          demandsByDay[dayKey] += Number(d.totalQuantity) || 0;
+        }
+      });
+      
+      // Contar quantos dias bateram a meta
+      Object.values(demandsByDay).forEach(artsInDay => {
+        if (artsInDay >= settings.dailyArtGoal) {
+          daysHitGoal++;
+        }
+      });
+    }
+
+    return { totalPoints, totalArts, totalDemands, topPerformer, avgArts, teamAvgArts, daysHitGoal, totalWorkingDays };
+  }, [filteredDemands, designers, selectedDesigner, dateFilter, customStartDate, customEndDate, settings.dailyArtGoal]);
 
   const chartData = useMemo(() => {
     const { start, end } = getDateRange();
@@ -506,6 +647,16 @@ export const AdminDashboard: React.FC = () => {
                   Semana
                 </button>
                 <button
+                  onClick={() => setDateFilter('semanaPassada')}
+                  className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    dateFilter === 'semanaPassada'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Semana Passada
+                </button>
+                <button
                   onClick={() => setDateFilter('mes')}
                   className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
                     dateFilter === 'mes'
@@ -556,22 +707,87 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div 
+            onClick={() => setSelectedCard(selectedCard === 'arts' ? null : 'arts')}
+            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+              selectedCard === 'arts'
+                ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}
+            title="Total de artes concluídas dentro do período selecionado"
+          >
             <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-semibold text-[#280FFF] dark:text-slate-300 uppercase tracking-wide">Artes Feitas</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalArts}</p>
+              <div className="flex-1">
+                <p className={`text-xs font-semibold uppercase tracking-wide ${
+                  selectedCard === 'arts'
+                    ? 'text-[#280FFF] dark:text-slate-300'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}>Artes Produzidas</p>
+                {(() => {
+                  const activeDesigners = designers.filter(d => d.role === 'DESIGNER' && d.active);
+                  const { start, end } = getDateRange();
+                  const workingDays = getWorkingDaysInRange(start, end);
+                  
+                  // Calcular meta do período
+                  let periodGoal = 0;
+                  if (selectedDesigner === 'all' || !selectedDesigner) {
+                    // Meta total do time
+                    const teamDailyGoal = (settings.dailyArtGoal || 0) * activeDesigners.length;
+                    if (dateFilter === 'hoje') {
+                      periodGoal = teamDailyGoal;
+                    } else if (dateFilter === 'semana' || dateFilter === 'semanaPassada') {
+                      periodGoal = teamDailyGoal * 6; // 6 dias úteis
+                    } else {
+                      periodGoal = teamDailyGoal * workingDays;
+                    }
+                  } else {
+                    // Meta individual do designer
+                    const dailyGoal = settings.dailyArtGoal || 0;
+                    if (dateFilter === 'hoje') {
+                      periodGoal = dailyGoal;
+                    } else if (dateFilter === 'semana' || dateFilter === 'semanaPassada') {
+                      periodGoal = dailyGoal * 6;
+                    } else {
+                      periodGoal = dailyGoal * workingDays;
+                    }
+                  }
+                  
+                  const performance = selectedDesigner === 'all' || !selectedDesigner
+                    ? 'medio' // Sem cor quando todos os designers
+                    : getArtsPerformance(stats.totalArts, settings.dailyArtGoal || 0);
+                  
+                  return (
+                    <p className={`text-3xl font-bold mt-2 ${
+                      selectedDesigner === 'all' || !selectedDesigner
+                        ? 'text-slate-900 dark:text-white'
+                        : getPerformanceColor(performance)
+                    }`}>
+                      {stats.totalArts}/{periodGoal}
+                    </p>
+                  );
+                })()}
               </div>
-              <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
+              <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg flex-shrink-0 ml-3">
                 <Calendar className="text-[#280FFF] dark:text-slate-300" size={22} />
               </div>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div 
+            onClick={() => setSelectedCard(selectedCard === 'demands' ? null : 'demands')}
+            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+              selectedCard === 'demands'
+                ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}
+          >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Demandas</p>
+                <p className={`text-xs font-semibold uppercase tracking-wide ${
+                  selectedCard === 'demands'
+                    ? 'text-[#280FFF] dark:text-slate-300'
+                    : 'text-slate-500 dark:text-slate-400'
+                }`}>Demandas</p>
                 <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalDemands}</p>
               </div>
               <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
@@ -580,12 +796,83 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
+          <div 
+            onClick={() => setSelectedCard(selectedCard === 'performance' ? null : 'performance')}
+            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+              selectedCard === 'performance'
+                ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}
+            title={selectedDesigner && selectedDesigner !== 'all' 
+              ? "Média de artes produzidas por dia útil no período"
+              : selectedDesigner === 'all' || !selectedDesigner
+              ? "Média de artes produzidas por dia útil no período"
+              : undefined
+            }
+          >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Top Performance</p>
-                <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 truncate">{stats.topPerformer.name}</p>
-                <p className="text-sm font-medium text-green-600 dark:text-green-400">+{stats.topPerformer.points} pts</p>
+                {selectedDesigner && selectedDesigner !== 'all' ? (
+                  <>
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                      selectedCard === 'performance'
+                        ? 'text-[#280FFF] dark:text-slate-300'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}>Média diária de artes</p>
+                    {(() => {
+                      const dailyGoal = settings.dailyArtGoal || 0;
+                      const performance = getAvgArtsPerformance(stats.avgArts, dailyGoal);
+                      
+                      // Calcular progresso (limitado entre 0 e 100%)
+                      const progress = dailyGoal > 0 
+                        ? Math.min(Math.max((stats.avgArts / dailyGoal) * 100, 0), 100)
+                        : 0;
+                      
+                      return (
+                        <>
+                          <p className={`text-3xl font-bold mt-2 ${getPerformanceColor(performance)}`}>
+                            {stats.avgArts.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </p>
+                          
+                          {/* Barra de progresso */}
+                          <div className="mt-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                progress >= 100 
+                                  ? 'bg-green-500 dark:bg-green-400'
+                                  : progress >= 75
+                                  ? 'bg-orange-500 dark:bg-orange-400'
+                                  : progress >= 50
+                                  ? 'bg-amber-500 dark:bg-amber-400'
+                                  : 'bg-red-500 dark:bg-red-400'
+                              }`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {Math.round(progress)}%
+                            </p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                              Meta: {dailyGoal} artes/dia
+                            </p>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                      selectedCard === 'performance'
+                        ? 'text-[#280FFF] dark:text-slate-300'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}>Top Performance</p>
+                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 truncate">{stats.topPerformer.name}</p>
+                    <p className="text-sm font-medium text-green-600 dark:text-green-400">+{stats.topPerformer.points} pts</p>
+                  </>
+                )}
               </div>
               <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
                 <Users className="text-amber-600 dark:text-amber-400" size={22} />
@@ -593,17 +880,99 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-800 rounded-xl p-5 border border-slate-200 dark:border-slate-700 shadow-sm">
+          {dateFilter !== 'hoje' && (
+          <div 
+            onClick={() => setSelectedCard(selectedCard === 'points' ? null : 'points')}
+            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+              selectedCard === 'points'
+                ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
+                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+            }`}
+          >
             <div className="flex items-start justify-between">
               <div>
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wide">Pontos Totais</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalPoints}</p>
+                {selectedDesigner === 'all' || !selectedDesigner ? (
+                  <>
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                      selectedCard === 'points'
+                        ? 'text-[#280FFF] dark:text-slate-300'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}>Média diária de artes</p>
+                    {(() => {
+                      const activeDesigners = designers.filter(d => d.role === 'DESIGNER' && d.active);
+                      const teamDailyGoal = (settings.dailyArtGoal || 0) * activeDesigners.length;
+                      const performance = getTeamAvgArtsPerformance(stats.teamAvgArts, teamDailyGoal);
+                      
+                      // Calcular progresso (limitado entre 0 e 100%)
+                      const progress = teamDailyGoal > 0 
+                        ? Math.min(Math.max((stats.teamAvgArts / teamDailyGoal) * 100, 0), 100)
+                        : 0;
+                      
+                      return (
+                        <>
+                          <p className={`text-3xl font-bold mt-2 ${getTeamPerformanceColor(performance)}`}>
+                            {stats.teamAvgArts.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                          </p>
+                          
+                          {/* Barra de progresso */}
+                          <div className="mt-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                            <div 
+                              className={`h-full rounded-full transition-all duration-300 ${
+                                progress >= 100 
+                                  ? 'bg-green-500 dark:bg-green-400'
+                                  : progress >= 75
+                                  ? 'bg-orange-500 dark:bg-orange-400'
+                                  : progress >= 50
+                                  ? 'bg-amber-500 dark:bg-amber-400'
+                                  : 'bg-red-500 dark:bg-red-400'
+                              }`}
+                              style={{ width: `${progress}%` }}
+                            />
+                          </div>
+                          
+                          <div className="flex items-center justify-between mt-2">
+                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                              {Math.round(progress)}%
+                            </p>
+                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                              Meta: {teamDailyGoal} artes/dia
+                            </p>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </>
+                ) : stats.topPerformer.id ? (
+                  <>
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                      selectedCard === 'points'
+                        ? 'text-[#280FFF] dark:text-slate-300'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}>Meta Batida</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">
+                      {stats.daysHitGoal}
+                    </p>
+                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                      {stats.totalWorkingDays > 0 ? `de ${stats.totalWorkingDays} dias` : 'dias'}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                      selectedCard === 'points'
+                        ? 'text-[#280FFF] dark:text-slate-300'
+                        : 'text-slate-500 dark:text-slate-400'
+                    }`}>Pontos Totais</p>
+                    <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalPoints}</p>
+                  </>
+                )}
               </div>
               <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
                 <Award className="text-slate-500 dark:text-slate-400" size={22} />
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
 
@@ -728,6 +1097,20 @@ export const AdminDashboard: React.FC = () => {
         )}
       </div>
 
+      {/* Visualização de Meta Diária Batida - Abaixo do gráfico de Produtividade por Designer */}
+      {/* IMPORTANTE: Passar TODAS as demandas, não apenas as filtradas, para calcular corretamente quem bateu a meta na semana */}
+      {/* Não passar startDate/endDate para que o componente sempre use a semana atual como padrão */}
+      <DailyGoalChart
+        demands={demands}
+        designers={designers}
+        settings={settings}
+        isDark={isDark}
+      />
+
+      {/* Gráficos de Produtividade */}
+      <HistoryCharts demands={demands} designers={designers} />
+
+      {/* Distribuição de Pontos e Resumo por Tipo de Arte - Movidos para o final */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6">
           <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
@@ -845,19 +1228,6 @@ export const AdminDashboard: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* Visualização de Meta Diária Batida */}
-      {/* IMPORTANTE: Passar TODAS as demandas, não apenas as filtradas, para calcular corretamente quem bateu a meta na semana */}
-      {/* Não passar startDate/endDate para que o componente sempre use a semana atual como padrão */}
-      <DailyGoalChart
-        demands={demands}
-        designers={designers}
-        settings={settings}
-        isDark={isDark}
-      />
-
-      {/* Gráficos de Produtividade */}
-      <HistoryCharts demands={demands} designers={designers} />
     </div>
   );
 };

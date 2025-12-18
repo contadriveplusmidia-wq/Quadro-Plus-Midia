@@ -415,7 +415,7 @@ export const HistoryCharts: React.FC<HistoryChartsProps> = ({ demands, designers
                     setSelectedYear(year);
                     setSelectedMonth(month - 1);
                   }}
-                  className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-sm hover:shadow"
+                  className="pl-10 pr-3 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-transparent outline-none transition-all duration-200 hover:border-slate-300 dark:hover:border-slate-600 cursor-pointer shadow-sm hover:shadow w-full"
                   title="Selecionar mês e ano"
                   onClick={(e) => {
                     (e.target as HTMLInputElement).showPicker?.();

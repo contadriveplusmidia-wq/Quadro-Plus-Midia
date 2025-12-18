@@ -1,16 +1,27 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { Calendar, Clock, ChevronDown, Users, Filter, X, Trash2 } from 'lucide-react';
-import { TimeFilter, WorkSessionRow } from '../types';
+import { Calendar, Clock, ChevronDown, Users, Filter, X, Trash2, Plus, Minus, Edit2, ClipboardList } from 'lucide-react';
+import { TimeFilter, WorkSessionRow, DemandItem, Demand } from '../types';
 import { HistoryCharts } from '../components/HistoryCharts';
 import { DatePicker } from '../components/DatePicker';
 
 export const AdminHistory: React.FC = () => {
-  const { users, demands, workSessions, adminFilters, setAdminFilters, deleteDemand, refreshData } = useApp();
+  const { users, demands, workSessions, artTypes, settings, adminFilters, setAdminFilters, addDemand, updateDemand, deleteDemand, refreshData } = useApp();
   const [viewMode, setViewMode] = useState<'sessions' | 'demands' | 'charts'>('sessions');
   const [customStartDate, setCustomStartDate] = useState<string>('');
   const [customEndDate, setCustomEndDate] = useState<string>('');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Estados para modal de demanda
+  const [showDemandModal, setShowDemandModal] = useState(false);
+  const [editingDemand, setEditingDemand] = useState<Demand | null>(null);
+  const [selectedDesigner, setSelectedDesigner] = useState<string>('');
+  const [demandDate, setDemandDate] = useState<string>('');
+  const [demandTime, setDemandTime] = useState<string>('');
+  const [items, setItems] = useState<DemandItem[]>([]);
+  const [selectedArtType, setSelectedArtType] = useState('');
+  const [quantity, setQuantity] = useState(1);
+  const [variationQty, setVariationQty] = useState(0);
   
   // Se vier com filtro de designer, definir viewMode como 'demands'
   // E configurar as datas customizadas se vierem no customRange
@@ -32,6 +43,15 @@ export const AdminHistory: React.FC = () => {
       }
     }
   }, [adminFilters.designerId, adminFilters.period, adminFilters.customRange]);
+
+  // Inicializar data e hora quando o modal abrir
+  useEffect(() => {
+    if (showDemandModal && !editingDemand && !demandDate) {
+      const now = new Date();
+      setDemandDate(formatDateForInput(now.getTime()));
+      setDemandTime(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+    }
+  }, [showDemandModal, editingDemand, demandDate]);
 
   const designers = users.filter(u => u.role === 'DESIGNER' && u.active);
 
@@ -478,11 +498,31 @@ export const AdminHistory: React.FC = () => {
         </div>
       ) : (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
-          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-            <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Demandas</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-              {filteredDemands.length} {filteredDemands.length === 1 ? 'demanda encontrada' : 'demandas encontradas'}
-            </p>
+          <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Demandas</h2>
+              <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {filteredDemands.length} {filteredDemands.length === 1 ? 'demanda encontrada' : 'demandas encontradas'}
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setEditingDemand(null);
+                setSelectedDesigner('');
+                setItems([]);
+                setSelectedArtType('');
+                setQuantity(1);
+                setVariationQty(0);
+                const now = new Date();
+                setDemandDate(formatDateForInput(now.getTime()));
+                setDemandTime(now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+                setShowDemandModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg transition-colors"
+            >
+              <Plus size={18} />
+              Nova Demanda
+            </button>
           </div>
           <div className="divide-y divide-slate-200 dark:divide-slate-800">
             {filteredDemands.length === 0 ? (
@@ -548,32 +588,364 @@ export const AdminHistory: React.FC = () => {
                           {demand.totalQuantity} {demand.totalQuantity === 1 ? 'arte' : 'artes'}
                         </p>
                       </div>
-                      <button
-                        onClick={async () => {
-                          if (window.confirm(`Tem certeza que deseja excluir esta demanda de ${demand.userName}?`)) {
-                            setDeletingId(demand.id);
-                            try {
-                              await deleteDemand(demand.id);
-                              await refreshData();
-                            } catch (error) {
-                              console.error('Erro ao excluir demanda:', error);
-                              alert('Erro ao excluir demanda. Tente novamente.');
-                            } finally {
-                              setDeletingId(null);
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingDemand(demand);
+                            setSelectedDesigner(demand.userId);
+                            setItems([...demand.items]);
+                            setSelectedArtType('');
+                            setQuantity(1);
+                            setVariationQty(0);
+                            const demandDateObj = new Date(demand.timestamp);
+                            setDemandDate(formatDateForInput(demand.timestamp));
+                            setDemandTime(demandDateObj.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }));
+                            setShowDemandModal(true);
+                          }}
+                          className="p-2 text-slate-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-lg transition-all duration-200"
+                          title="Editar demanda"
+                        >
+                          <Edit2 size={18} />
+                        </button>
+                        <button
+                          onClick={async () => {
+                            if (window.confirm(`Tem certeza que deseja excluir esta demanda de ${demand.userName}?`)) {
+                              setDeletingId(demand.id);
+                              try {
+                                await deleteDemand(demand.id);
+                                await refreshData();
+                              } catch (error) {
+                                console.error('Erro ao excluir demanda:', error);
+                                alert('Erro ao excluir demanda. Tente novamente.');
+                              } finally {
+                                setDeletingId(null);
+                              }
                             }
-                          }
-                        }}
-                        disabled={deletingId === demand.id}
-                        className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Excluir demanda"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                          }}
+                          disabled={deletingId === demand.id}
+                          className="p-2 text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Excluir demanda"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               ))
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Criar/Editar Demanda */}
+      {showDemandModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ClipboardList className="text-slate-500 dark:text-slate-400" size={20} />
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                  {editingDemand ? 'Editar Demanda' : 'Nova Demanda'}
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setShowDemandModal(false);
+                  setEditingDemand(null);
+                  setSelectedDesigner('');
+                  setItems([]);
+                  setSelectedArtType('');
+                  setQuantity(1);
+                  setVariationQty(0);
+                }}
+                className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Seleção de Designer e Data */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">
+                    Designer
+                  </label>
+                  <select
+                    value={selectedDesigner}
+                    onChange={(e) => setSelectedDesigner(e.target.value)}
+                    disabled={!!editingDemand}
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-brand-600 outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">Selecione um designer</option>
+                    {designers.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">
+                    Data
+                  </label>
+                  <DatePicker
+                    value={demandDate}
+                    onChange={(date) => setDemandDate(date)}
+                    title="Data da demanda"
+                    placeholder="Data"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wide">
+                    Hora
+                  </label>
+                  <input
+                    type="time"
+                    value={demandTime}
+                    onChange={(e) => setDemandTime(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-sm font-medium text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-600 focus:border-brand-600 outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Formulário de Itens */}
+              {selectedDesigner && (
+                <>
+                  <div>
+                    <label className="block text-xs text-slate-500 dark:text-slate-400 mb-3 uppercase tracking-wide">
+                      Tipo de Arte
+                    </label>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                      {artTypes.map(art => (
+                        <button
+                          key={art.id}
+                          onClick={() => setSelectedArtType(art.id)}
+                          className={`px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-medium text-center ${
+                            selectedArtType === art.id
+                              ? 'border-brand-600 bg-brand-50 dark:bg-slate-800 dark:border-slate-600 text-brand-600 dark:text-slate-300 shadow-sm'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:border-brand-400 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          }`}
+                        >
+                          {art.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedArtType && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
+                          QTD
+                        </label>
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg">
+                          <button 
+                            onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                            className="px-3 py-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <input
+                            type="number"
+                            min="1"
+                            value={quantity}
+                            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                            className="w-full text-center py-2.5 bg-transparent outline-none text-sm"
+                          />
+                          <button 
+                            onClick={() => setQuantity(quantity + 1)}
+                            className="px-3 py-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs text-slate-500 dark:text-slate-400 mb-1.5 uppercase tracking-wide">
+                          Variações
+                        </label>
+                        <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg">
+                          <button 
+                            onClick={() => setVariationQty(Math.max(0, variationQty - 1))}
+                            className="px-3 py-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            <Minus size={16} />
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            value={variationQty}
+                            onChange={(e) => setVariationQty(parseInt(e.target.value) || 0)}
+                            className="w-full text-center py-2.5 bg-transparent outline-none text-sm"
+                          />
+                          <button 
+                            onClick={() => setVariationQty(variationQty + 1)}
+                            className="px-3 py-2.5 text-slate-400 hover:text-slate-600"
+                          >
+                            <Plus size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedArtType && (
+                    <div className="flex items-center justify-end">
+                      <button
+                        onClick={() => {
+                          const selectedArt = artTypes.find(a => a.id === selectedArtType);
+                          if (!selectedArt) return;
+                          const variationPoints = variationQty * (settings?.variationPoints || 5);
+                          const itemPoints = (selectedArt.points * quantity) + variationPoints;
+                          const newItem: DemandItem = {
+                            artTypeId: selectedArt.id,
+                            artTypeLabel: selectedArt.label,
+                            pointsPerUnit: selectedArt.points,
+                            quantity,
+                            variationQuantity: variationQty,
+                            variationPoints,
+                            totalPoints: itemPoints
+                          };
+                          setItems([...items, newItem]);
+                          setSelectedArtType('');
+                          setQuantity(1);
+                          setVariationQty(0);
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 border-2 border-dashed border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400 rounded-xl hover:border-brand-600 hover:text-brand-600 dark:hover:border-slate-400 dark:hover:text-slate-300 transition-all duration-200 hover:bg-brand-50 dark:hover:bg-brand-900/10"
+                      >
+                        <Plus size={18} />
+                        Adicionar Item
+                      </button>
+                    </div>
+                  )}
+
+                  {items.length > 0 && (
+                    <div className="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-white">Itens da Demanda</h3>
+                      </div>
+                      <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                        {items.map((item, idx) => (
+                          <div key={idx} className="p-4 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium text-slate-900 dark:text-white">
+                                {item.quantity}x {item.artTypeLabel}
+                              </span>
+                              {item.variationQuantity ? (
+                                <span className="text-xs text-slate-500">(+{item.variationQuantity} var)</span>
+                              ) : null}
+                              <span className="text-sm text-brand-600 dark:text-brand-400 font-semibold">
+                                {item.totalPoints} pts
+                              </span>
+                            </div>
+                            <button 
+                              onClick={() => setItems(items.filter((_, i) => i !== idx))}
+                              className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between">
+                        <div>
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Total de Artes</p>
+                          <p className="text-lg font-bold text-slate-900 dark:text-white">
+                            {items.reduce((acc, item) => {
+                              const isVariation = item.artTypeLabel.toLowerCase().includes('variação');
+                              return acc + (isVariation ? 0 : item.quantity);
+                            }, 0)}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-slate-500 dark:text-slate-400">Total de Pontos</p>
+                          <p className="text-lg font-bold text-brand-600 dark:text-brand-400">
+                            {items.reduce((acc, item) => acc + item.totalPoints, 0)}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                    <button
+                      onClick={() => {
+                        setShowDemandModal(false);
+                        setEditingDemand(null);
+                        setSelectedDesigner('');
+                        setItems([]);
+                        setSelectedArtType('');
+                        setQuantity(1);
+                        setVariationQty(0);
+                      }}
+                      className="flex-1 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-lg transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!selectedDesigner || items.length === 0) {
+                          alert('Selecione um designer e adicione pelo menos um item.');
+                          return;
+                        }
+
+                        const designer = designers.find(d => d.id === selectedDesigner);
+                        if (!designer) return;
+
+                        // Calcular timestamp a partir da data e hora
+                        const [hours, minutes] = demandTime.split(':').map(Number);
+                        const dateObj = new Date(demandDate);
+                        dateObj.setHours(hours || 0, minutes || 0, 0, 0);
+                        const timestamp = dateObj.getTime();
+
+                        // Variações não contam como artes, apenas como pontos
+                        const totalQuantity = items.reduce((acc, item) => {
+                          const isVariation = item.artTypeLabel.toLowerCase().includes('variação');
+                          return acc + (isVariation ? 0 : item.quantity);
+                        }, 0);
+                        const totalPoints = items.reduce((acc, item) => acc + item.totalPoints, 0);
+
+                        try {
+                          if (editingDemand) {
+                            await updateDemand(editingDemand.id, {
+                              items,
+                              totalQuantity,
+                              totalPoints,
+                              timestamp
+                            });
+                          } else {
+                            await addDemand({
+                              userId: selectedDesigner,
+                              userName: designer.name,
+                              items,
+                              totalQuantity,
+                              totalPoints,
+                              timestamp
+                            });
+                          }
+                          await refreshData();
+                          setShowDemandModal(false);
+                          setEditingDemand(null);
+                          setSelectedDesigner('');
+                          setItems([]);
+                          setSelectedArtType('');
+                          setQuantity(1);
+                          setVariationQty(0);
+                        } catch (error) {
+                          console.error('Erro ao salvar demanda:', error);
+                          alert('Erro ao salvar demanda. Tente novamente.');
+                        }
+                      }}
+                      disabled={!selectedDesigner || items.length === 0}
+                      className="flex-1 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {editingDemand ? 'Salvar Alterações' : 'Criar Demanda'}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}
