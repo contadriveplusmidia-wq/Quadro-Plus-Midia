@@ -15,10 +15,12 @@ dotenv.config();
 
 // ============ DETECÇÃO DE AMBIENTE ============
 // Determinar se estamos em desenvolvimento local (SQLite) ou produção (PostgreSQL/Neon)
-// FORÇAR SQLite em desenvolvimento local (NODE_ENV !== 'production' e não Vercel)
+// Regra: Se não estiver na Vercel, sempre usar SQLite (independente de NODE_ENV)
+//        Se estiver na Vercel, usar PostgreSQL (requer DATABASE_URL)
 const isVercel = process.env.VERCEL === '1';
-const isLocalDev = process.env.NODE_ENV !== 'production' && !isVercel;
-const useSQLite = isLocalDev; // Sempre usar SQLite em desenvolvimento local
+// Se não estiver na Vercel, sempre usar SQLite (mesmo em produção local)
+// Se estiver na Vercel, usar PostgreSQL (precisa de DATABASE_URL)
+const useSQLite = !isVercel;
 
 // ============ CONEXÃO SQLITE (LOCAL) ============
 import Database from 'better-sqlite3';
@@ -58,7 +60,8 @@ if (useSQLite) {
     process.exit(1);
   }
 } else {
-  console.log('⚠️  SQLite desabilitado. useSQLite =', useSQLite, 'isVercel =', isVercel, 'NODE_ENV =', process.env.NODE_ENV);
+  // Se chegou aqui, está na Vercel e deve usar PostgreSQL
+  console.log('ℹ️  Usando PostgreSQL (Vercel). useSQLite =', useSQLite, 'isVercel =', isVercel, 'NODE_ENV =', process.env.NODE_ENV);
 }
 
 // ============ CONEXÃO POSTGRESQL (PRODUÇÃO) ============
