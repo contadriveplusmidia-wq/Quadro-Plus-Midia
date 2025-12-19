@@ -1,7 +1,7 @@
 import express from 'express';
 import type { Request, Response } from 'express';
 import cors from 'cors';
-// PostgreSQL (comentado para desenvolvimento local - usado apenas em produção/Vercel)
+// PostgreSQL removido - usando apenas SQLite (local e servidor local)
 // import { Pool } from 'pg';
 import bcrypt from 'bcryptjs';
 
@@ -14,13 +14,9 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // ============ DETECÇÃO DE AMBIENTE ============
-// Determinar se estamos em desenvolvimento local (SQLite) ou produção (PostgreSQL/Neon)
-// Regra: Se não estiver na Vercel, sempre usar SQLite (independente de NODE_ENV)
-//        Se estiver na Vercel, usar PostgreSQL (requer DATABASE_URL)
-const isVercel = process.env.VERCEL === '1';
-// Se não estiver na Vercel, sempre usar SQLite (mesmo em produção local)
-// Se estiver na Vercel, usar PostgreSQL (precisa de DATABASE_URL)
-const useSQLite = !isVercel;
+// Sempre usar SQLite (local e servidor local)
+// Removida lógica de Vercel/PostgreSQL
+const useSQLite = true; // Sempre SQLite
 
 // ============ CONEXÃO SQLITE (LOCAL) ============
 import Database from 'better-sqlite3';
@@ -30,42 +26,37 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 
 let db: DatabaseType | null = null;
-if (useSQLite) {
-  try {
-    // Obter diretório atual (ESModules)
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-    const dbPath = path.join(__dirname, '..', 'database.db');
-    
-    console.log('🔍 Tentando conectar SQLite...');
-    console.log('📁 Caminho do arquivo:', dbPath);
-    console.log('📁 Caminho absoluto:', path.resolve(dbPath));
-    
-    // Verificar se o arquivo existe
-    const exists = fs.existsSync(dbPath);
-    console.log('📄 Arquivo existe?', exists);
-    
-    if (!exists) {
-      console.warn('⚠️  Arquivo database.db não encontrado. Criando novo arquivo...');
-    }
-    
-    db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    console.log('✅ Conectado ao banco de dados SQLite (local):', dbPath);
-  } catch (err: any) {
-    console.error('❌ Erro ao conectar SQLite:', err);
-    console.error('❌ Detalhes do erro:', err.message);
-    console.error('❌ Stack:', err.stack);
-    process.exit(1);
+try {
+  // Obter diretório atual (ESModules)
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  const dbPath = path.join(__dirname, '..', 'database.db');
+  
+  console.log('🔍 Tentando conectar SQLite...');
+  console.log('📁 Caminho do arquivo:', dbPath);
+  console.log('📁 Caminho absoluto:', path.resolve(dbPath));
+  
+  // Verificar se o arquivo existe
+  const exists = fs.existsSync(dbPath);
+  console.log('📄 Arquivo existe?', exists);
+  
+  if (!exists) {
+    console.warn('⚠️  Arquivo database.db não encontrado. Criando novo arquivo...');
   }
-} else {
-  // Se chegou aqui, está na Vercel e deve usar PostgreSQL
-  console.log('ℹ️  Usando PostgreSQL (Vercel). useSQLite =', useSQLite, 'isVercel =', isVercel, 'NODE_ENV =', process.env.NODE_ENV);
+  
+  db = new Database(dbPath);
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  console.log('✅ Conectado ao banco de dados SQLite:', dbPath);
+} catch (err: any) {
+  console.error('❌ Erro ao conectar SQLite:', err);
+  console.error('❌ Detalhes do erro:', err.message);
+  console.error('❌ Stack:', err.stack);
+  process.exit(1);
 }
 
-// ============ CONEXÃO POSTGRESQL (PRODUÇÃO) ============
-// Comentado para desenvolvimento local - descomentar apenas em produção/Vercel
+// ============ CONEXÃO POSTGRESQL ============
+// Removido - usando apenas SQLite (local e servidor local)
 /*
 let pool: Pool | null = null;
 if (!useSQLite) {
@@ -100,27 +91,25 @@ if (!useSQLite) {
 }
 */
 
-const isProduction = !isLocalDev;
-const isDevelopment = process.env.NODE_ENV !== 'production';
+// Variáveis de ambiente simplificadas - sempre desenvolvimento local
+const isProduction = false;
+const isDevelopment = true;
 
 // ============ FUNÇÕES AUXILIARES PARA QUERIES ============
-// Abstração para executar queries tanto em SQLite quanto PostgreSQL
-// SQLite usa placeholders ? e PostgreSQL usa $1, $2, etc.
+// Abstração para executar queries SQLite
+// SQLite usa placeholders ? - converter $1, $2, etc para ?
 function convertPlaceholders(sql: string): string {
-  if (useSQLite) {
-    // Converter $1, $2, etc para ? mantendo a ordem
-    // Substituir do maior para o menor para evitar conflitos (ex: $10 antes de $1)
-    let converted = sql;
-    const matches = sql.match(/\$(\d+)/g) || [];
-    if (matches.length > 0) {
-      const placeholders = [...new Set(matches)].map(m => parseInt(m.substring(1))).sort((a, b) => b - a);
-      for (const num of placeholders) {
-        converted = converted.replace(new RegExp(`\\$${num}\\b`, 'g'), '?');
-      }
+  // Converter $1, $2, etc para ? mantendo a ordem
+  // Substituir do maior para o menor para evitar conflitos (ex: $10 antes de $1)
+  let converted = sql;
+  const matches = sql.match(/\$(\d+)/g) || [];
+  if (matches.length > 0) {
+    const placeholders = [...new Set(matches)].map(m => parseInt(m.substring(1))).sort((a, b) => b - a);
+    for (const num of placeholders) {
+      converted = converted.replace(new RegExp(`\\$${num}\\b`, 'g'), '?');
     }
-    return converted;
   }
-  return sql;
+  return converted;
 }
 
 function convertParams(params: any[]): any[] {
@@ -139,135 +128,71 @@ function convertParams(params: any[]): any[] {
 
 // Função para executar query SELECT (retorna array de resultados)
 async function query(sql: string, params: any[] = []): Promise<any[]> {
-  if (useSQLite && db) {
-    const convertedSql = convertPlaceholders(sql);
-    const convertedParams = convertParams(params);
-    const stmt = db.prepare(convertedSql);
-    return stmt.all(...convertedParams);
+  if (!db) {
+    throw new Error('Banco de dados SQLite não inicializado');
   }
-  // PostgreSQL (comentado para desenvolvimento local)
-  /*
-  if (pool) {
-    const result = await pool.query(sql, params);
-    return result.rows;
-  }
-  */
-  throw new Error('Nenhuma conexão de banco de dados disponível');
+  const convertedSql = convertPlaceholders(sql);
+  const convertedParams = convertParams(params);
+  const stmt = db.prepare(convertedSql);
+  return stmt.all(...convertedParams);
 }
 
 // Função para executar query que retorna uma única linha
 async function queryOne(sql: string, params: any[] = []): Promise<any | null> {
-  if (useSQLite && db) {
-    const convertedSql = convertPlaceholders(sql);
-    const convertedParams = convertParams(params);
-    const stmt = db.prepare(convertedSql);
-    return stmt.get(...convertedParams) || null;
+  if (!db) {
+    throw new Error('Banco de dados SQLite não inicializado');
   }
-  // PostgreSQL (comentado para desenvolvimento local)
-  /*
-  if (pool) {
-    const result = await pool.query(sql, params);
-    return result.rows[0] || null;
-  }
-  */
-  throw new Error('Nenhuma conexão de banco de dados disponível');
+  const convertedSql = convertPlaceholders(sql);
+  const convertedParams = convertParams(params);
+  const stmt = db.prepare(convertedSql);
+  return stmt.get(...convertedParams) || null;
 }
 
 // Função para executar query INSERT/UPDATE/DELETE (retorna informações de execução)
 async function execute(sql: string, params: any[] = []): Promise<any> {
-  if (useSQLite && db) {
-    const convertedSql = convertPlaceholders(sql);
-    const convertedParams = convertParams(params);
-    const stmt = db.prepare(convertedSql);
-    const result = stmt.run(...convertedParams);
-    return {
-      rowsAffected: result.changes,
-      lastInsertRowid: result.lastInsertRowid
-    };
+  if (!db) {
+    throw new Error('Banco de dados SQLite não inicializado');
   }
-  // PostgreSQL (comentado para desenvolvimento local)
-  /*
-  if (pool) {
-    const result = await pool.query(sql, params);
-    return {
-      rowsAffected: result.rowCount || 0,
-      rows: result.rows
-    };
-  }
-  */
-  throw new Error('Nenhuma conexão de banco de dados disponível');
+  const convertedSql = convertPlaceholders(sql);
+  const convertedParams = convertParams(params);
+  const stmt = db.prepare(convertedSql);
+  const result = stmt.run(...convertedParams);
+  return {
+    rowsAffected: result.changes,
+    lastInsertRowid: result.lastInsertRowid
+  };
 }
 
 // Função para iniciar transação
 async function beginTransaction(): Promise<any> {
-  if (useSQLite && db) {
-    // SQLite não precisa de BEGIN explícito, mas podemos usar transação
-    return db.transaction(() => {});
+  if (!db) {
+    throw new Error('Banco de dados SQLite não inicializado');
   }
-  // PostgreSQL (comentado para desenvolvimento local)
-  /*
-  if (pool) {
-    const client = await pool.connect();
-    await client.query('BEGIN');
-    return client;
-  }
-  */
-  throw new Error('Nenhuma conexão de banco de dados disponível');
+  // SQLite não precisa de BEGIN explícito, mas podemos usar transação
+  return db.transaction(() => {});
 }
 
 // Função para commit de transação
 async function commitTransaction(client: any): Promise<void> {
-  if (useSQLite && db) {
-    // SQLite commit é automático, mas podemos chamar explicitamente
-    return;
-  }
-  // PostgreSQL (comentado para desenvolvimento local)
-  /*
-  if (client) {
-    await client.query('COMMIT');
-    client.release();
-  }
-  */
+  // SQLite commit é automático, mas podemos chamar explicitamente
+  return;
 }
 
 // Função para rollback de transação
 async function rollbackTransaction(client: any): Promise<void> {
-  if (useSQLite && db) {
-    // SQLite rollback é automático em caso de erro
-    return;
-  }
-  // PostgreSQL (comentado para desenvolvimento local)
-  /*
-  if (client) {
-    await client.query('ROLLBACK');
-    client.release();
-  }
-  */
+  // SQLite rollback é automático em caso de erro
+  return;
 }
 
 // Função helper para executar transação SQLite
 function runTransaction(callback: (db: DatabaseType) => void): void {
-  if (useSQLite && db) {
-    const transactionFn = db.transaction(() => {
-      callback(db);
-    });
-    transactionFn();
-  } else {
-    // PostgreSQL (comentado para desenvolvimento local)
-    /*
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
-      await callback(client);
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
-    */
+  if (!db) {
+    throw new Error('Banco de dados SQLite não inicializado');
   }
+  const transactionFn = db.transaction(() => {
+    callback(db);
+  });
+  transactionFn();
 }
 
 // ============ FUNÇÃO HELPER PARA CONVERTER CAMPOS NUMÉRICOS ============
@@ -3021,15 +2946,5 @@ app.get('/api/health', (req: Request, res: Response) => {
   return res.json({ status: 'ok', timestamp: Date.now() });
 });
 
-// ============ LOCAL SERVER ============
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 3001;
-  app.listen(PORT, () => {
-    console.log(`Dev server running on port ${PORT}`);
-  });
-}
-
-// ============ VERCEL HANDLER ============
-// Para Vercel, exportamos o app diretamente
-// O Vercel automaticamente cria rotas para /api/* quando há api/index.ts
+// ============ EXPORT ============
 export default app;
