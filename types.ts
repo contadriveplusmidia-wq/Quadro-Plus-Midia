@@ -177,3 +177,14 @@ export interface DesignerNotification {
   createdAt: number;
   updatedAt: number;
 }
+
+export interface CalendarObservation {
+  id: string;
+  designerId: string;
+  designerName?: string;
+  date: string; // YYYY-MM-DD format
+  note: string;
+  type?: 'absence' | 'event' | 'note'; // Tipo de observação
+  createdAt: number;
+  updatedAt: number;
+}

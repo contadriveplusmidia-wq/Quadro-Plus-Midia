@@ -17,6 +17,7 @@ import { AdminFeedbacks } from './pages/AdminFeedbacks';
 import { AdminLessons } from './pages/AdminLessons';
 import { AdminPremiacoes } from './pages/AdminPremiacoes';
 import { AdminLinks } from './pages/AdminLinks';
+import { AdminControle } from './pages/AdminControle';
 
 // Private Route Component
 const PrivateRoute: React.FC<{ children: React.ReactElement, requiredRole?: 'ADM' | 'DESIGNER' }> = ({ children, requiredRole }) => {
@@ -100,6 +101,11 @@ const AppRoutes = () => {
       <Route path="/admin/settings" element={
         <PrivateRoute requiredRole="ADM">
           <AdminSettings />
+        </PrivateRoute>
+      } />
+      <Route path="/admin/controle" element={
+        <PrivateRoute requiredRole="ADM">
+          <AdminControle />
         </PrivateRoute>
       } />
 

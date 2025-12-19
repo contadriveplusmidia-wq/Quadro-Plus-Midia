@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag } from '../types';
+import { User, ArtType, Demand, WorkSession, Feedback, Lesson, LessonProgress, SystemSettings, TimeFilter, AdminFilters, Award, UsefulLink, Tag, CalendarObservation } from '../types';
 
 const API_URL = '';
 
@@ -17,6 +17,7 @@ interface AppContextType {
   awards: Award[];
   usefulLinks: UsefulLink[];
   tags: Tag[];
+  calendarObservations: CalendarObservation[];
   settings: SystemSettings;
   adminFilters: AdminFilters;
   loading: boolean;
@@ -57,6 +58,9 @@ interface AppContextType {
   updateSettings: (settings: Partial<SystemSettings>) => Promise<void>;
   resetAwardsUpdates: () => Promise<void>;
   refreshData: () => Promise<void>;
+  addCalendarObservation: (observation: Omit<CalendarObservation, 'id' | 'createdAt' | 'updatedAt' | 'designerName'>) => Promise<void>;
+  updateCalendarObservation: (id: string, observation: Partial<CalendarObservation>) => Promise<void>;
+  deleteCalendarObservation: (id: string) => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -103,6 +107,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [awards, setAwards] = useState<Award[]>([]);
   const [usefulLinks, setUsefulLinks] = useState<UsefulLink[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [calendarObservations, setCalendarObservations] = useState<CalendarObservation[]>([]);
   const [settings, setSettings] = useState<SystemSettings>({});
   const [loading, setLoading] = useState(true);
   const [adminFilters, setAdminFilters] = useState<AdminFilters>({
@@ -165,7 +170,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const fetchData = async () => {
     try {
-      const [usersRes, artTypesRes, demandsRes, sessionsRes, feedbacksRes, lessonsRes, awardsRes, linksRes, tagsRes, settingsRes] = await Promise.all([
+      const [usersRes, artTypesRes, demandsRes, sessionsRes, feedbacksRes, lessonsRes, awardsRes, linksRes, tagsRes, observationsRes, settingsRes] = await Promise.all([
         fetch(`${API_URL}/api/users`),
         fetch(`${API_URL}/api/art-types`),
         fetch(`${API_URL}/api/demands`),
@@ -175,6 +180,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         fetch(`${API_URL}/api/awards`),
         fetch(`${API_URL}/api/useful-links`),
         fetch(`${API_URL}/api/tags`),
+        fetch(`${API_URL}/api/calendar-observations`),
         fetch(`${API_URL}/api/settings`)
       ]);
       
@@ -187,6 +193,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       if (awardsRes.ok) setAwards(await awardsRes.json());
       if (linksRes.ok) setUsefulLinks(await linksRes.json());
       if (tagsRes.ok) setTags(await tagsRes.json());
+      if (observationsRes.ok) setCalendarObservations(await observationsRes.json());
       if (settingsRes.ok) setSettings(await settingsRes.json());
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -776,6 +783,43 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  const addCalendarObservation = async (observation: Omit<CalendarObservation, 'id' | 'createdAt' | 'updatedAt' | 'designerName'>) => {
+    const res = await fetch(`${API_URL}/api/calendar-observations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(observation)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao criar observação' }));
+      throw new Error(error.error || 'Erro ao criar observação');
+    }
+    const newObservation = await res.json();
+    setCalendarObservations(prev => [newObservation, ...prev]);
+  };
+
+  const updateCalendarObservation = async (id: string, observation: Partial<CalendarObservation>) => {
+    const res = await fetch(`${API_URL}/api/calendar-observations/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(observation)
+    });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao atualizar observação' }));
+      throw new Error(error.error || 'Erro ao atualizar observação');
+    }
+    const updatedObservation = await res.json();
+    setCalendarObservations(prev => prev.map(o => o.id === id ? updatedObservation : o));
+  };
+
+  const deleteCalendarObservation = async (id: string) => {
+    const res = await fetch(`${API_URL}/api/calendar-observations/${id}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: 'Erro ao deletar observação' }));
+      throw new Error(error.error || 'Erro ao deletar observação');
+    }
+    setCalendarObservations(prev => prev.filter(o => o.id !== id));
+  };
+
   const refreshData = useCallback(fetchData, []);
 
   return (
@@ -791,6 +835,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       awards,
       usefulLinks,
       tags,
+      calendarObservations,
       settings,
       adminFilters,
       loading,
@@ -830,7 +875,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       reorderArtTypes,
       updateSettings,
       resetAwardsUpdates,
-      refreshData
+      refreshData,
+      addCalendarObservation,
+      updateCalendarObservation,
+      deleteCalendarObservation
     }}>
       {children}
     </AppContext.Provider>

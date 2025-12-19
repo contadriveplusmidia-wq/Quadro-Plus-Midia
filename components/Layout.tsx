@@ -14,6 +14,7 @@ import {
   Moon,
   Trophy,
   Link2,
+  Calendar,
   Funnel,
   ChevronLeft,
   ChevronRight
@@ -99,6 +100,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const adminLinks = [
     { to: '/admin', icon: LayoutDashboard, label: 'Dashboard', badge: 0, hasUpdate: false },
     { to: '/admin/history', icon: History, label: 'Histórico', badge: 0, hasUpdate: false },
+    { to: '/admin/controle', icon: Calendar, label: 'Controle', badge: 0, hasUpdate: false },
     { to: '/admin/feedbacks', icon: MessageSquare, label: 'Feedbacks', badge: 0, hasUpdate: false },
     { to: '/admin/lessons', icon: GraduationCap, label: 'Aulas', badge: 0, hasUpdate: false },
     { to: '/admin/premiacoes', icon: Trophy, label: 'Premiações', badge: 0, hasUpdate: awardsHasUpdates },

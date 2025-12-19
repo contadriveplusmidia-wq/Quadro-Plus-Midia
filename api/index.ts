@@ -2727,6 +2727,292 @@ app.delete('/api/designer-notifications/:id', async (req: Request, res: Response
   }
 });
 
+// ============ CALENDAR OBSERVATIONS ============
+// Criar tabela se não existir (SQLite)
+if (useSQLite && db) {
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS calendar_observations (
+        id VARCHAR(50) PRIMARY KEY,
+        designer_id VARCHAR(50) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        date VARCHAR(10) NOT NULL,
+        note TEXT NOT NULL,
+        type VARCHAR(20) CHECK (type IN ('absence', 'event', 'note')) DEFAULT 'note',
+        created_at BIGINT NOT NULL,
+        updated_at BIGINT NOT NULL,
+        UNIQUE(designer_id, date)
+      );
+      CREATE INDEX IF NOT EXISTS idx_calendar_observations_date ON calendar_observations(date);
+      CREATE INDEX IF NOT EXISTS idx_calendar_observations_designer ON calendar_observations(designer_id);
+    `);
+    console.log('✅ Tabela calendar_observations criada/verificada');
+  } catch (error: any) {
+    console.error('⚠️  Erro ao criar tabela calendar_observations:', error.message);
+  }
+}
+
+// GET /api/calendar-observations - Listar todas as observações
+app.get('/api/calendar-observations', async (req: Request, res: Response) => {
+  try {
+    const { date, designerId } = req.query;
+    
+    let sql = `
+      SELECT 
+        co.id,
+        co.designer_id,
+        u.name as designer_name,
+        co.date,
+        co.note,
+        co.type,
+        co.created_at,
+        co.updated_at
+      FROM calendar_observations co
+      LEFT JOIN users u ON co.designer_id = u.id
+      WHERE 1=1
+    `;
+    const params: any[] = [];
+    
+    if (date) {
+      sql += useSQLite ? ' AND co.date = ?' : ' AND co.date = $' + (params.length + 1);
+      params.push(date);
+    }
+    
+    if (designerId) {
+      sql += useSQLite ? ' AND co.designer_id = ?' : ' AND co.designer_id = $' + (params.length + 1);
+      params.push(designerId);
+    }
+    
+    sql += ' ORDER BY co.date DESC, co.created_at DESC';
+    
+    const rows = await query(sql, params);
+    
+    return res.json(rows.map((row: any) => convertNumericFields({
+      id: String(row.id),
+      designerId: String(row.designer_id),
+      designerName: row.designer_name,
+      date: row.date,
+      note: row.note,
+      type: row.type || 'note',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }, ['createdAt', 'updatedAt'])));
+  } catch (error: any) {
+    console.error('Erro ao buscar observações:', error);
+    return res.status(500).json({ error: 'Erro ao buscar observações', details: error?.message });
+  }
+});
+
+// GET /api/calendar-observations/:id - Buscar uma observação específica
+app.get('/api/calendar-observations/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    const row = await queryOne(
+      useSQLite
+        ? `SELECT co.*, u.name as designer_name 
+           FROM calendar_observations co 
+           LEFT JOIN users u ON co.designer_id = u.id 
+           WHERE co.id = ?`
+        : `SELECT co.*, u.name as designer_name 
+           FROM calendar_observations co 
+           LEFT JOIN users u ON co.designer_id = u.id 
+           WHERE co.id = $1`,
+      [id]
+    );
+    
+    if (!row) {
+      return res.status(404).json({ error: 'Observação não encontrada' });
+    }
+    
+    return res.json(convertNumericFields({
+      id: String(row.id),
+      designerId: String(row.designer_id),
+      designerName: row.designer_name,
+      date: row.date,
+      note: row.note,
+      type: row.type || 'note',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    }, ['createdAt', 'updatedAt']));
+  } catch (error: any) {
+    console.error('Erro ao buscar observação:', error);
+    return res.status(500).json({ error: 'Erro ao buscar observação', details: error?.message });
+  }
+});
+
+// POST /api/calendar-observations - Criar nova observação
+app.post('/api/calendar-observations', async (req: Request, res: Response) => {
+  try {
+    const { designerId, date, note, type } = req.body;
+    
+    if (!designerId || !date || !note) {
+      return res.status(400).json({ error: 'designerId, date e note são obrigatórios' });
+    }
+    
+    // Validar formato de data (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({ error: 'Formato de data inválido. Use YYYY-MM-DD' });
+    }
+    
+    // Validar tipo
+    const validType = type && ['absence', 'event', 'note'].includes(type) ? type : 'note';
+    
+    const id = `obs_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const now = Date.now();
+    
+    // Verificar se já existe observação para este designer e data
+    const existing = await queryOne(
+      useSQLite
+        ? 'SELECT id FROM calendar_observations WHERE designer_id = ? AND date = ?'
+        : 'SELECT id FROM calendar_observations WHERE designer_id = $1 AND date = $2',
+      [designerId, date]
+    );
+    
+    if (existing) {
+      return res.status(400).json({ error: 'Já existe uma observação para este designer nesta data' });
+    }
+    
+    await execute(
+      useSQLite
+        ? 'INSERT INTO calendar_observations (id, designer_id, date, note, type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+        : 'INSERT INTO calendar_observations (id, designer_id, date, note, type, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+      [id, designerId, date, note, validType, now, now]
+    );
+    
+    // Buscar designer name
+    const designer = await queryOne(
+      useSQLite ? 'SELECT name FROM users WHERE id = ?' : 'SELECT name FROM users WHERE id = $1',
+      [designerId]
+    );
+    
+    return res.json(convertNumericFields({
+      id,
+      designerId,
+      designerName: designer?.name,
+      date,
+      note,
+      type: validType,
+      createdAt: now,
+      updatedAt: now
+    }, ['createdAt', 'updatedAt']));
+  } catch (error: any) {
+    console.error('Erro ao criar observação:', error);
+    
+    if (error?.code === 'SQLITE_CONSTRAINT_UNIQUE' || error?.code === '23505') {
+      return res.status(400).json({ error: 'Já existe uma observação para este designer nesta data' });
+    }
+    
+    return res.status(500).json({ error: 'Erro ao criar observação', details: error?.message });
+  }
+});
+
+// PUT /api/calendar-observations/:id - Atualizar observação
+app.put('/api/calendar-observations/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { note, type, date, designerId } = req.body;
+    
+    // Verificar se a observação existe
+    const existing = await queryOne(
+      useSQLite ? 'SELECT * FROM calendar_observations WHERE id = ?' : 'SELECT * FROM calendar_observations WHERE id = $1',
+      [id]
+    );
+    
+    if (!existing) {
+      return res.status(404).json({ error: 'Observação não encontrada' });
+    }
+    
+    // Construir query de atualização dinamicamente
+    const updates: string[] = [];
+    const params: any[] = [];
+    
+    if (note !== undefined) {
+      updates.push(useSQLite ? 'note = ?' : `note = $${params.length + 1}`);
+      params.push(note);
+    }
+    
+    if (type !== undefined) {
+      const validType = ['absence', 'event', 'note'].includes(type) ? type : 'note';
+      updates.push(useSQLite ? 'type = ?' : `type = $${params.length + 1}`);
+      params.push(validType);
+    }
+    
+    if (date !== undefined) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        return res.status(400).json({ error: 'Formato de data inválido. Use YYYY-MM-DD' });
+      }
+      updates.push(useSQLite ? 'date = ?' : `date = $${params.length + 1}`);
+      params.push(date);
+    }
+    
+    if (designerId !== undefined) {
+      updates.push(useSQLite ? 'designer_id = ?' : `designer_id = $${params.length + 1}`);
+      params.push(designerId);
+    }
+    
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Nenhum campo para atualizar' });
+    }
+    
+    updates.push(useSQLite ? 'updated_at = ?' : `updated_at = $${params.length + 1}`);
+    params.push(Date.now());
+    
+    params.push(id);
+    
+    await execute(
+      useSQLite
+        ? `UPDATE calendar_observations SET ${updates.join(', ')} WHERE id = ?`
+        : `UPDATE calendar_observations SET ${updates.join(', ')} WHERE id = $${params.length}`,
+      params
+    );
+    
+    // Buscar observação atualizada
+    const updated = await queryOne(
+      useSQLite
+        ? `SELECT co.*, u.name as designer_name 
+           FROM calendar_observations co 
+           LEFT JOIN users u ON co.designer_id = u.id 
+           WHERE co.id = ?`
+        : `SELECT co.*, u.name as designer_name 
+           FROM calendar_observations co 
+           LEFT JOIN users u ON co.designer_id = u.id 
+           WHERE co.id = $1`,
+      [id]
+    );
+    
+    return res.json(convertNumericFields({
+      id: String(updated.id),
+      designerId: String(updated.designer_id),
+      designerName: updated.designer_name,
+      date: updated.date,
+      note: updated.note,
+      type: updated.type || 'note',
+      createdAt: updated.created_at,
+      updatedAt: updated.updated_at
+    }, ['createdAt', 'updatedAt']));
+  } catch (error: any) {
+    console.error('Erro ao atualizar observação:', error);
+    return res.status(500).json({ error: 'Erro ao atualizar observação', details: error?.message });
+  }
+});
+
+// DELETE /api/calendar-observations/:id - Deletar observação
+app.delete('/api/calendar-observations/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    
+    await execute(
+      useSQLite ? 'DELETE FROM calendar_observations WHERE id = ?' : 'DELETE FROM calendar_observations WHERE id = $1',
+      [id]
+    );
+    
+    return res.json({ success: true });
+  } catch (error: any) {
+    console.error('Erro ao deletar observação:', error);
+    return res.status(500).json({ error: 'Erro ao deletar observação', details: error?.message });
+  }
+});
+
 // ============ HEALTH CHECK ============
 app.get('/api/health', (req: Request, res: Response) => {
   return res.json({ status: 'ok', timestamp: Date.now() });
