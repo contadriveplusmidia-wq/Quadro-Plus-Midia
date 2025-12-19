@@ -23,3 +23,4 @@ console.log('✅ Conectado ao banco de dados SQLite:', dbPath);
 
 export default db;
 
+

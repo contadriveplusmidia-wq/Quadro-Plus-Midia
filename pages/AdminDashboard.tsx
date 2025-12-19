@@ -706,19 +706,21 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 ${
+          dateFilter === 'hoje' ? 'lg:grid-cols-3' : 'lg:grid-cols-4'
+        }`}>
           <div 
             onClick={() => setSelectedCard(selectedCard === 'arts' ? null : 'arts')}
-            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+            className={`bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
               selectedCard === 'arts'
                 ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
                 : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
             }`}
             title="Total de artes concluídas dentro do período selecionado"
           >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <p className={`text-xs font-semibold uppercase tracking-wide ${
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
                   selectedCard === 'arts'
                     ? 'text-[#280FFF] dark:text-slate-300'
                     : 'text-slate-500 dark:text-slate-400'
@@ -757,7 +759,7 @@ export const AdminDashboard: React.FC = () => {
                     : getArtsPerformance(stats.totalArts, settings.dailyArtGoal || 0);
                   
                   return (
-                    <p className={`text-3xl font-bold mt-2 ${
+                    <p className={`text-2xl sm:text-3xl font-bold mt-1.5 sm:mt-2 break-words ${
                       selectedDesigner === 'all' || !selectedDesigner
                         ? 'text-slate-900 dark:text-white'
                         : getPerformanceColor(performance)
@@ -767,38 +769,38 @@ export const AdminDashboard: React.FC = () => {
                   );
                 })()}
               </div>
-              <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg flex-shrink-0 ml-3">
-                <Calendar className="text-[#280FFF] dark:text-slate-300" size={22} />
+              <div className="p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-700 rounded-lg flex-shrink-0">
+                <Calendar className="text-[#280FFF] dark:text-slate-300" size={18} />
               </div>
             </div>
           </div>
 
           <div 
             onClick={() => setSelectedCard(selectedCard === 'demands' ? null : 'demands')}
-            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+            className={`bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
               selectedCard === 'demands'
                 ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
                 : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
             }`}
           >
-            <div className="flex items-start justify-between">
-              <div>
-                <p className={`text-xs font-semibold uppercase tracking-wide ${
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
                   selectedCard === 'demands'
                     ? 'text-[#280FFF] dark:text-slate-300'
                     : 'text-slate-500 dark:text-slate-400'
                 }`}>Demandas</p>
-                <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalDemands}</p>
+                <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1.5 sm:mt-2">{stats.totalDemands}</p>
               </div>
-              <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                <TrendingUp className="text-slate-500 dark:text-slate-400" size={22} />
+              <div className="p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-700 rounded-lg flex-shrink-0">
+                <TrendingUp className="text-slate-500 dark:text-slate-400" size={18} />
               </div>
             </div>
           </div>
 
           <div 
             onClick={() => setSelectedCard(selectedCard === 'performance' ? null : 'performance')}
-            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+            className={`bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
               selectedCard === 'performance'
                 ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
                 : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
@@ -810,11 +812,11 @@ export const AdminDashboard: React.FC = () => {
               : undefined
             }
           >
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
                 {selectedDesigner && selectedDesigner !== 'all' ? (
                   <>
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                    <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
                       selectedCard === 'performance'
                         ? 'text-[#280FFF] dark:text-slate-300'
                         : 'text-slate-500 dark:text-slate-400'
@@ -830,12 +832,12 @@ export const AdminDashboard: React.FC = () => {
                       
                       return (
                         <>
-                          <p className={`text-3xl font-bold mt-2 ${getPerformanceColor(performance)}`}>
+                          <p className={`text-2xl sm:text-3xl font-bold mt-1.5 sm:mt-2 ${getPerformanceColor(performance)}`}>
                             {stats.avgArts.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                           </p>
                           
                           {/* Barra de progresso */}
-                          <div className="mt-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div className="mt-2 sm:mt-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 sm:h-2 overflow-hidden">
                             <div 
                               className={`h-full rounded-full transition-all duration-300 ${
                                 progress >= 100 
@@ -850,11 +852,11 @@ export const AdminDashboard: React.FC = () => {
                             />
                           </div>
                           
-                          <div className="flex items-center justify-between mt-2">
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center justify-between mt-1.5 sm:mt-2">
+                            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
                               {Math.round(progress)}%
                             </p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                            <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 truncate ml-1">
                               Meta: {dailyGoal} artes/dia
                             </p>
                           </div>
@@ -864,18 +866,18 @@ export const AdminDashboard: React.FC = () => {
                   </>
                 ) : (
                   <>
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                    <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
                       selectedCard === 'performance'
                         ? 'text-[#280FFF] dark:text-slate-300'
                         : 'text-slate-500 dark:text-slate-400'
                     }`}>Top Performance</p>
-                    <p className="text-2xl font-bold text-slate-900 dark:text-white mt-2 truncate">{stats.topPerformer.name}</p>
-                    <p className="text-sm font-medium text-green-600 dark:text-green-400">+{stats.topPerformer.points} pts</p>
+                    <p className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white mt-1.5 sm:mt-2 truncate">{stats.topPerformer.name}</p>
+                    <p className="text-xs sm:text-sm font-medium text-green-600 dark:text-green-400">+{stats.topPerformer.points} pts</p>
                   </>
                 )}
               </div>
-              <div className="p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-                <Users className="text-amber-600 dark:text-amber-400" size={22} />
+              <div className="p-1.5 sm:p-2 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex-shrink-0">
+                <Users className="text-amber-600 dark:text-amber-400" size={18} />
               </div>
             </div>
           </div>
@@ -883,17 +885,17 @@ export const AdminDashboard: React.FC = () => {
           {dateFilter !== 'hoje' && (
           <div 
             onClick={() => setSelectedCard(selectedCard === 'points' ? null : 'points')}
-            className={`bg-white dark:bg-slate-800 rounded-xl p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
+            className={`bg-white dark:bg-slate-800 rounded-xl p-4 sm:p-5 border shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 cursor-pointer ${
               selectedCard === 'points'
                 ? 'border-brand-500 dark:border-brand-500 shadow-md ring-2 ring-brand-200 dark:ring-brand-800'
                 : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
             }`}
           >
-            <div className="flex items-start justify-between">
-              <div>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
                 {selectedDesigner === 'all' || !selectedDesigner ? (
                   <>
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                    <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
                       selectedCard === 'points'
                         ? 'text-[#280FFF] dark:text-slate-300'
                         : 'text-slate-500 dark:text-slate-400'
@@ -910,12 +912,12 @@ export const AdminDashboard: React.FC = () => {
                       
                       return (
                         <>
-                          <p className={`text-3xl font-bold mt-2 ${getTeamPerformanceColor(performance)}`}>
+                          <p className={`text-2xl sm:text-3xl font-bold mt-1.5 sm:mt-2 ${getTeamPerformanceColor(performance)}`}>
                             {stats.teamAvgArts.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
                           </p>
                           
                           {/* Barra de progresso */}
-                          <div className="mt-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                          <div className="mt-2 sm:mt-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 sm:h-2 overflow-hidden">
                             <div 
                               className={`h-full rounded-full transition-all duration-300 ${
                                 progress >= 100 
@@ -930,11 +932,11 @@ export const AdminDashboard: React.FC = () => {
                             />
                           </div>
                           
-                          <div className="flex items-center justify-between mt-2">
-                            <p className="text-xs text-slate-500 dark:text-slate-400">
+                          <div className="flex items-center justify-between mt-1.5 sm:mt-2">
+                            <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400">
                               {Math.round(progress)}%
                             </p>
-                            <p className="text-xs text-slate-400 dark:text-slate-500">
+                            <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 truncate ml-1">
                               Meta: {teamDailyGoal} artes/dia
                             </p>
                           </div>
@@ -944,31 +946,31 @@ export const AdminDashboard: React.FC = () => {
                   </>
                 ) : stats.topPerformer.id ? (
                   <>
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                    <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
                       selectedCard === 'points'
                         ? 'text-[#280FFF] dark:text-slate-300'
                         : 'text-slate-500 dark:text-slate-400'
                     }`}>Meta Batida</p>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">
+                    <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1.5 sm:mt-2">
                       {stats.daysHitGoal}
                     </p>
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                    <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
                       {stats.totalWorkingDays > 0 ? `de ${stats.totalWorkingDays} dias` : 'dias'}
                     </p>
                   </>
                 ) : (
                   <>
-                    <p className={`text-xs font-semibold uppercase tracking-wide ${
+                    <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wide ${
                       selectedCard === 'points'
                         ? 'text-[#280FFF] dark:text-slate-300'
                         : 'text-slate-500 dark:text-slate-400'
                     }`}>Pontos Totais</p>
-                    <p className="text-3xl font-bold text-slate-900 dark:text-white mt-2">{stats.totalPoints}</p>
+                    <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white mt-1.5 sm:mt-2">{stats.totalPoints}</p>
                   </>
                 )}
               </div>
-              <div className="p-2 bg-slate-100 dark:bg-slate-700 rounded-lg">
-                <Award className="text-slate-500 dark:text-slate-400" size={22} />
+              <div className="p-1.5 sm:p-2 bg-slate-100 dark:bg-slate-700 rounded-lg flex-shrink-0">
+                <Award className="text-slate-500 dark:text-slate-400" size={18} />
               </div>
             </div>
           </div>
