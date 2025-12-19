@@ -2946,5 +2946,11 @@ app.get('/api/health', (req: Request, res: Response) => {
   return res.json({ status: 'ok', timestamp: Date.now() });
 });
 
+// ============ LOCAL SERVER ============
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => {
+  console.log(`Dev server running on port ${PORT}`);
+});
+
 // ============ EXPORT ============
 export default app;
